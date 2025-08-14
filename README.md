@@ -46,6 +46,60 @@ Once `connect()` is called, the client will continuously attempt to establish or
 
 See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution, or [tudo](https://github.com/cachapa/tudo) for a real-world application.
 
+### Using with Serverpod streaming methods
+
+Serverpod uses streaming endpoint methods instead of exposing raw WebSockets. `crdt_sync` supports this via a transport abstraction:
+
+- Use `DuplexStreamChannel` to adapt a pair of `Stream<String>`/`StreamSink<String>` to the sync layer.
+- Use `CrdtSync.clientWithChannel` and `CrdtSync.serverWithChannel` to start synchronization over the adapted channel.
+
+Client-side (inside your Serverpod client app):
+
+```dart
+// Acquire a Serverpod streaming method pair
+final inController = StreamController<String>();
+final outStream = client.example.echoStream(inController.stream);
+
+// Wrap as a SyncChannel
+final channel = DuplexStreamChannel(
+  incoming: outStream,
+  outgoing: inController.sink,
+);
+
+// Start sync over the channel
+CrdtSync.clientWithChannel(
+  crdt,
+  channel,
+  handshakeDataBuilder: () => {'some': 'metadata'},
+);
+```
+
+Server-side (inside a Serverpod endpoint):
+
+```dart
+class SyncEndpoint extends Endpoint {
+  Stream<String> crdtStream(Session session, Stream<String> fromClient) async* {
+    final toClient = StreamController<String>();
+
+    // Start CRDT sync over the duplex stream
+    final channel = DuplexStreamChannel(
+      incoming: fromClient,
+      outgoing: toClient.sink,
+    );
+    CrdtSync.serverWithChannel(
+      crdt,
+      channel,
+      handshakeDataBuilder: (peerId, peerData) => {'server': 'info'},
+    );
+
+    // Yield server->client messages
+    yield* toClient.stream;
+  }
+}
+```
+
+Note: The wire format is the same JSON strings used by WebSockets, so no additional serialization is necessary.
+
 ## Features and bugs
 
 Please file feature requests and bugs in the [issue tracker](https://github.com/cachapa/crdt_sync/issues).

@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt/crdt.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'sync_channel.dart';
 
 typedef Handshake = ({
   String nodeId,
@@ -11,7 +12,7 @@ typedef Handshake = ({
 });
 
 class SyncSocket {
-  final WebSocketChannel socket;
+  final SyncChannel socket;
   final void Function(int? code, String? reason) onDisconnect;
   final void Function(CrdtChangeset changeset) onChangeset;
   final bool verbose;
@@ -85,7 +86,7 @@ class SyncSocket {
   Future<void> close([int? code, String? reason]) async {
     await Future.wait([
       _subscription.cancel(),
-      socket.sink.close(code, reason),
+      socket.close(code, reason),
     ]);
 
     onDisconnect(socket.closeCode, socket.closeReason);

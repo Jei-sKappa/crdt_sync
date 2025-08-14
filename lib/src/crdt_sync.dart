@@ -4,6 +4,7 @@ import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'sync_socket.dart';
+import 'sync_channel.dart';
 
 typedef ClientHandshakeDataBuilder = FutureOr<Object>? Function();
 typedef ServerHandshakeDataBuilder = FutureOr<Object>? Function(
@@ -84,7 +85,35 @@ class CrdtSync {
     bool verbose = false,
   }) : this._(
           crdt,
-          webSocket,
+          WebSocketSyncChannel(webSocket),
+          isClient: true,
+          clientHandshakeDataBuilder: handshakeDataBuilder,
+          changesetBuilder: changesetBuilder,
+          validateRecord: validateRecord,
+          mapIncomingChangeset: mapIncomingChangeset,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+          onChangesetReceived: onChangesetReceived,
+          onChangesetSent: onChangesetSent,
+          verbose: verbose,
+        );
+
+  /// Starts synchronization over a generic [SyncChannel] on the client side.
+  CrdtSync.clientWithChannel(
+    Crdt crdt,
+    SyncChannel channel, {
+    ClientHandshakeDataBuilder? handshakeDataBuilder,
+    ChangesetBuilder? changesetBuilder,
+    RecordValidator? validateRecord,
+    ChangesetMapper? mapIncomingChangeset,
+    OnConnect? onConnect,
+    OnDisconnect? onDisconnect,
+    OnChangeset? onChangesetReceived,
+    OnChangeset? onChangesetSent,
+    bool verbose = false,
+  }) : this._(
+          crdt,
+          channel,
           isClient: true,
           clientHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,
@@ -122,7 +151,35 @@ class CrdtSync {
     bool verbose = false,
   }) : this._(
           crdt,
-          webSocket,
+          WebSocketSyncChannel(webSocket),
+          isClient: false,
+          serverHandshakeDataBuilder: handshakeDataBuilder,
+          changesetBuilder: changesetBuilder,
+          validateRecord: validateRecord,
+          mapIncomingChangeset: mapIncomingChangeset,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+          onChangesetReceived: onChangesetReceived,
+          onChangesetSent: onChangesetSent,
+          verbose: verbose,
+        );
+
+  /// Starts synchronization over a generic [SyncChannel] on the server side.
+  CrdtSync.serverWithChannel(
+    Crdt crdt,
+    SyncChannel channel, {
+    ServerHandshakeDataBuilder? handshakeDataBuilder,
+    ChangesetBuilder? changesetBuilder,
+    RecordValidator? validateRecord,
+    ChangesetMapper? mapIncomingChangeset,
+    OnConnect? onConnect,
+    OnDisconnect? onDisconnect,
+    OnChangeset? onChangesetReceived,
+    OnChangeset? onChangesetSent,
+    bool verbose = false,
+  }) : this._(
+          crdt,
+          channel,
           isClient: false,
           serverHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,
@@ -137,7 +194,7 @@ class CrdtSync {
 
   CrdtSync._(
     this.crdt,
-    WebSocketChannel webSocket, {
+    SyncChannel channel, {
     required this.isClient,
     this.clientHandshakeDataBuilder,
     this.serverHandshakeDataBuilder,
@@ -152,14 +209,14 @@ class CrdtSync {
   })  : changesetBuilder = changesetBuilder ?? crdt.getChangeset,
         assert((isClient && serverHandshakeDataBuilder == null) ||
             (!isClient && clientHandshakeDataBuilder == null)) {
-    _handle(webSocket);
+    _handle(channel);
   }
 
-  Future<void> _handle(WebSocketChannel webSocket) async {
+  Future<void> _handle(SyncChannel channel) async {
     StreamSubscription? localSubscription;
 
     _syncSocket = SyncSocket(
-      webSocket,
+      channel,
       crdt.nodeId,
       onDisconnect: (code, reason) {
         localSubscription?.cancel();
