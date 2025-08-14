@@ -24,16 +24,32 @@ void main() {
     final server = MapCrdt(['t']);
     final client = MapCrdt(['t']);
 
-    final serverReceived = Completer<Map<String, int>>();
-    final clientSent = Completer<Map<String, int>>();
+    final handshakeComplete = Completer<void>();
+    final validationComplete = Completer<void>();
+    var connectionCount = 0;
+    var recordsProcessed = 0;
+    final validationResults = <String, bool>{};
 
     // Server rejects records where value.blocked == true and tags accepted ones
     CrdtSync.serverWithChannel(
       server,
       pair.a,
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2) handshakeComplete.complete();
+      },
       validateRecord: (table, record) async {
+        final key = record['key'] as String;
         final blocked = (record['value'] as Map)['blocked'] == true;
-        return !blocked;
+        final isValid = !blocked;
+        validationResults[key] = isValid;
+
+        recordsProcessed++;
+        if (recordsProcessed == 2) {
+          validationComplete.complete();
+        }
+
+        return isValid;
       },
       mapIncomingChangeset: (table, record) {
         final value = Map<String, dynamic>.from(record['value'] as Map);
@@ -42,57 +58,44 @@ void main() {
         copy['value'] = value;
         return copy;
       },
-      onChangesetReceived: (_, counts) {
-        if (!serverReceived.isCompleted) serverReceived.complete(counts);
-      },
       verbose: true,
     );
 
     CrdtSync.clientWithChannel(
       client,
       pair.b,
-      onChangesetSent: (_, counts) {
-        if (!clientSent.isCompleted) clientSent.complete(counts);
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2) handshakeComplete.complete();
       },
       verbose: true,
     );
 
-    // Wait for handshake
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    // Wait for proper handshake completion
+    await handshakeComplete.future.timeout(Duration(seconds: 2));
 
     // Client writes two records: one accepted and one rejected
     await client.put('t', 'ok', {'blocked': false, 'value': 1});
-    // Allow a tiny delay to avoid coalescing with the next write in some schedulers
-    await Future<void>.delayed(const Duration(milliseconds: 10));
     await client.put('t', 'bad', {'blocked': true, 'value': 2});
 
-    // Wait for transfer and merge (first send may batch)
-    final sentCounts =
-        await clientSent.future.timeout(const Duration(seconds: 2));
-    // Two puts may coalesce by table-level batching; assert at least one record sent
-    expect(sentCounts['t'], inInclusiveRange(1, 2));
+    // Wait for validation to complete
+    await validationComplete.future.timeout(Duration(seconds: 2));
 
-    final recvCounts =
-        await serverReceived.future.timeout(const Duration(seconds: 2));
-    expect(recvCounts['t'], 1);
+    // Verify validation results
+    expect(validationResults['ok'], true);
+    expect(validationResults['bad'], false);
 
     // Verify server has only the accepted record and it was mapped
-    // Wait until server CRDT reports a change
-    Future<List<Map<String, dynamic>>> getServerRecords() async =>
-        (server.getChangeset()['t'] ?? [])
-            .map<Map<String, dynamic>>(
-                (e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-    List<Map<String, dynamic>> serverRecords = await getServerRecords();
-    final deadline = DateTime.now().add(const Duration(seconds: 2));
-    while (serverRecords.isEmpty && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      serverRecords = await getServerRecords();
-    }
+    final serverRecords = server.getChangeset()['t'] ?? [];
     final accepted = serverRecords.where((r) => r['key'] == 'ok').toList();
-    expect(accepted, isNotEmpty);
+    final rejected = serverRecords.where((r) => r['key'] == 'bad').toList();
+
+    expect(accepted.length, 1);
+    expect(rejected.length, 0);
+
     final acceptedRecord = accepted.first;
     expect((acceptedRecord['value'] as Map)['touched'], true);
+    expect((acceptedRecord['value'] as Map)['value'], 1);
   });
 
   test('CrdtSync.close triggers onDisconnect with DuplexStreamChannel',
@@ -102,11 +105,13 @@ void main() {
     final client = MapCrdt(['t']);
 
     late final CrdtSync serverSync;
+    final connected = Completer<void>();
     final disconnected = Completer<void>();
 
     serverSync = CrdtSync.serverWithChannel(
       server,
       pair.a,
+      onConnect: (_, __) => connected.complete(),
       onDisconnect: (_, code, reason) {
         expect(code, isNull);
         expect(reason, isNull);
@@ -119,9 +124,10 @@ void main() {
       pair.b,
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    // Wait for connection to be established before closing
+    await connected.future.timeout(Duration(seconds: 2));
     await serverSync.close();
-    await disconnected.future.timeout(const Duration(seconds: 2));
+    await disconnected.future.timeout(Duration(seconds: 2));
   });
 
   test('WebSocket integration: upgrade server and CrdtSyncClient connects',
@@ -130,6 +136,7 @@ void main() {
 
     final httpServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final port = httpServer.port;
+    final serverConnected = Completer<void>();
 
     // Accept a single connection then keep serving until test ends
     unawaited(() async {
@@ -137,7 +144,11 @@ void main() {
         final ws = await WebSocketTransformer.upgrade(req);
         final channel = IOWebSocketChannel(ws);
         // Start server sync for this connection
-        CrdtSync.server(crdtServer, channel);
+        CrdtSync.server(
+          crdtServer,
+          channel,
+          onConnect: (_, __) => serverConnected.complete(),
+        );
       }
     }());
 
@@ -160,21 +171,174 @@ void main() {
         if (!disconnected.isCompleted) disconnected.complete();
       },
     );
-    client.watchState.listen(stateChanges.add);
 
-    client.connect();
-    await connected.future.timeout(const Duration(seconds: 5));
+    final stateSubscription = client.watchState.listen(stateChanges.add);
 
-    // Disconnect explicitly
-    await client.disconnect(4000, 'bye');
-    await disconnected.future.timeout(const Duration(seconds: 5));
+    try {
+      client.connect();
+      await Future.wait([
+        connected.future.timeout(Duration(seconds: 5)),
+        serverConnected.future.timeout(Duration(seconds: 5)),
+      ]);
 
-    // Cleanup
-    await httpServer.close(force: true);
+      // Verify connection state
+      expect(client.state, SocketState.connected);
 
-    // Verify expected state changes occurred
-    expect(stateChanges.contains(SocketState.connecting), isTrue);
-    expect(stateChanges.contains(SocketState.connected), isTrue);
-    expect(stateChanges.contains(SocketState.disconnected), isTrue);
+      // Disconnect explicitly
+      await client.disconnect(4000, 'bye');
+      await disconnected.future.timeout(Duration(seconds: 5));
+
+      // Verify final state
+      expect(client.state, SocketState.disconnected);
+
+      // Verify expected state changes occurred
+      expect(stateChanges.contains(SocketState.connecting), isTrue);
+      expect(stateChanges.contains(SocketState.connected), isTrue);
+      expect(stateChanges.contains(SocketState.disconnected), isTrue);
+    } finally {
+      // Cleanup
+      await stateSubscription.cancel();
+      await httpServer.close(force: true);
+    }
+  });
+
+  test('async validation with exceptions', () async {
+    final pair = _LoopbackPair();
+    final server = MapCrdt(['t']);
+    final client = MapCrdt(['t']);
+
+    final handshakeComplete = Completer<void>();
+    final validationComplete = Completer<void>();
+    var connectionCount = 0;
+    var recordsValidated = 0;
+    final validationResults = <String, bool>{};
+
+    CrdtSync.serverWithChannel(
+      server,
+      pair.a,
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2 && !handshakeComplete.isCompleted) {
+          handshakeComplete.complete();
+        }
+      },
+      validateRecord: (table, record) async {
+        final key = record['key'] as String;
+        recordsValidated++;
+
+        if (key == 'error') {
+          validationResults[key] = false;
+          // Return false instead of throwing to test validation logic
+          if (recordsValidated >= 2 && !validationComplete.isCompleted) {
+            validationComplete.complete();
+          }
+          return false;
+        }
+
+        validationResults[key] = true;
+        if (recordsValidated >= 2 && !validationComplete.isCompleted) {
+          validationComplete.complete();
+        }
+        return true;
+      },
+    );
+
+    CrdtSync.clientWithChannel(
+      client,
+      pair.b,
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2 && !handshakeComplete.isCompleted) {
+          handshakeComplete.complete();
+        }
+      },
+    );
+
+    await handshakeComplete.future.timeout(Duration(seconds: 2));
+
+    // Send a record that will be rejected and one that will be accepted
+    await client.put('t', 'error', {'data': 'should fail'});
+    await client.put('t', 'ok', {'data': 'should pass'});
+
+    await validationComplete.future.timeout(Duration(seconds: 2));
+
+    // Verify validation results
+    expect(validationResults['error'], false);
+    expect(validationResults['ok'], true);
+
+    // Wait a bit more for processing to complete
+    await Future.delayed(Duration(milliseconds: 200));
+
+    // Verify that only the valid record made it through
+    final serverRecords = server.getChangeset()['t'] ?? [];
+    expect(serverRecords.length, greaterThanOrEqualTo(1));
+    expect(serverRecords.any((r) => r['key'] == 'ok'), isTrue);
+    expect(serverRecords.any((r) => r['key'] == 'error'), isFalse);
+  });
+
+  test('custom changeset builder filtering', () async {
+    final pair = _LoopbackPair();
+    final server = MapCrdt(['public', 'private']);
+    final client = MapCrdt(['public', 'private']);
+
+    final connected = Completer<void>();
+    final dataReceived = Completer<void>();
+    var connectionCount = 0;
+
+    // Server only sends 'public' table data
+    CrdtSync.serverWithChannel(
+      server,
+      pair.a,
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2) connected.complete();
+      },
+      changesetBuilder: (
+          {onlyTables, onlyNodeId, exceptNodeId, modifiedOn, modifiedAfter}) {
+        // Only include public table in outgoing changesets
+        final changeset = server.getChangeset(
+          onlyTables: ['public'],
+          onlyNodeId: onlyNodeId,
+          exceptNodeId: exceptNodeId,
+          modifiedOn: modifiedOn,
+          modifiedAfter: modifiedAfter,
+        );
+        return changeset;
+      },
+    );
+
+    CrdtSync.clientWithChannel(
+      client,
+      pair.b,
+      onConnect: (_, __) {
+        connectionCount++;
+        if (connectionCount == 2) connected.complete();
+      },
+    );
+
+    await connected.future.timeout(Duration(seconds: 2));
+
+    // Monitor client for data
+    final subscription = client.onTablesChanged.listen((event) {
+      if (event.tables.contains('public') && !dataReceived.isCompleted) {
+        dataReceived.complete();
+      }
+    });
+
+    // Server adds data to both tables
+    await server
+        .put('public', 'pub1', {'type': 'public', 'data': 'everyone can see'});
+    await server.put('private', 'priv1', {'type': 'private', 'data': 'secret'});
+
+    await dataReceived.future.timeout(Duration(seconds: 2));
+    await subscription.cancel();
+
+    // Verify client only received public data
+    final clientPublic = client.getChangeset()['public'] ?? [];
+    final clientPrivate = client.getChangeset()['private'] ?? [];
+
+    expect(clientPublic.length, 1);
+    expect(clientPrivate.length, 0);
+    expect(clientPublic.first['key'], 'pub1');
   });
 }

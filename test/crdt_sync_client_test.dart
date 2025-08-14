@@ -1,0 +1,351 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:crdt/map_crdt.dart';
+import 'package:crdt_sync/crdt_sync.dart';
+import 'package:test/test.dart';
+import 'package:web_socket_channel/io.dart';
+
+void main() {
+  group('CrdtSyncClient Reconnection', () {
+    late HttpServer server;
+    late int port;
+    late MapCrdt serverCrdt;
+
+    setUp(() async {
+      serverCrdt = MapCrdt(['test']);
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      port = server.port;
+    });
+
+    tearDown(() async {
+      await server.close(force: true);
+    });
+
+    test('exponential backoff reconnection strategy', () async {
+      var connectionAttempts = 0;
+      final connectionTimes = <DateTime>[];
+
+      // Server that rejects first few connections
+      unawaited(() async {
+        await for (final req in server) {
+          connectionAttempts++;
+          connectionTimes.add(DateTime.now());
+
+          if (connectionAttempts <= 2) {
+            // Reject first two connections
+            req.response.statusCode = 503;
+            await req.response.close();
+          } else {
+            // Accept third connection
+            final ws = await WebSocketTransformer.upgrade(req);
+            final channel = IOWebSocketChannel(ws);
+            CrdtSync.server(serverCrdt, channel);
+          }
+        }
+      }());
+
+      final client = MapCrdt(['test']);
+      final stateChanges = <SocketState>[];
+      final connected = Completer<void>();
+
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://localhost:$port'),
+        onConnecting: () => stateChanges.add(SocketState.connecting),
+        onConnect: (_, __) {
+          stateChanges.add(SocketState.connected);
+          connected.complete();
+        },
+        onDisconnect: (_, __, ___) =>
+            stateChanges.add(SocketState.disconnected),
+      );
+
+      syncClient.connect();
+      await connected.future.timeout(Duration(seconds: 15));
+
+      // Verify exponential backoff occurred
+      expect(connectionAttempts, 3);
+      expect(connectionTimes.length, 3);
+
+      // Check that delays increased (allowing some tolerance for timing)
+      if (connectionTimes.length >= 3) {
+        final delay1 =
+            connectionTimes[1].difference(connectionTimes[0]).inSeconds;
+        final delay2 =
+            connectionTimes[2].difference(connectionTimes[1]).inSeconds;
+
+        expect(delay1, greaterThanOrEqualTo(1)); // First retry after ~2s
+        expect(delay2, greaterThanOrEqualTo(3)); // Second retry after ~4s
+      }
+
+      // Verify final state
+      expect(syncClient.state, SocketState.connected);
+      expect(stateChanges.contains(SocketState.connecting), isTrue);
+      expect(stateChanges.contains(SocketState.connected), isTrue);
+
+      await syncClient.disconnect();
+    });
+
+    test('reconnection after unexpected disconnect', () async {
+      var serverConnections = 0;
+      late IOWebSocketChannel firstConnection;
+
+      unawaited(() async {
+        await for (final req in server) {
+          serverConnections++;
+          final ws = await WebSocketTransformer.upgrade(req);
+          final channel = IOWebSocketChannel(ws);
+
+          if (serverConnections == 1) {
+            firstConnection = channel;
+          }
+
+          CrdtSync.server(serverCrdt, channel);
+        }
+      }());
+
+      final client = MapCrdt(['test']);
+      final connected = Completer<void>();
+      final disconnected = Completer<void>();
+      final reconnected = Completer<void>();
+      var connectCount = 0;
+
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://localhost:$port'),
+        onConnect: (_, __) {
+          connectCount++;
+          if (connectCount == 1) {
+            connected.complete();
+          } else if (connectCount == 2) {
+            reconnected.complete();
+          }
+        },
+        onDisconnect: (_, __, ___) {
+          if (!disconnected.isCompleted) disconnected.complete();
+        },
+      );
+
+      syncClient.connect();
+      await connected.future.timeout(Duration(seconds: 5));
+
+      // Force disconnect the first connection
+      await firstConnection.sink.close();
+      await disconnected.future.timeout(Duration(seconds: 5));
+
+      // Wait for automatic reconnection
+      await reconnected.future.timeout(Duration(seconds: 10));
+
+      expect(serverConnections, 2);
+      expect(connectCount, 2);
+      expect(syncClient.state, SocketState.connected);
+
+      await syncClient.disconnect();
+    });
+
+    test('manual disconnect stops automatic reconnection', () async {
+      var connectionAttempts = 0;
+
+      // Server that always rejects connections
+      unawaited(() async {
+        await for (final req in server) {
+          connectionAttempts++;
+          req.response.statusCode = 503;
+          await req.response.close();
+        }
+      }());
+
+      final client = MapCrdt(['test']);
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://localhost:$port'),
+      );
+
+      syncClient.connect();
+
+      // Let it try to connect for a bit
+      await Future.delayed(Duration(seconds: 1));
+
+      // Manually disconnect
+      await syncClient.disconnect();
+
+      final attemptsBeforeDisconnect = connectionAttempts;
+
+      // Wait a bit more and verify no more connection attempts
+      await Future.delayed(Duration(seconds: 3));
+
+      expect(connectionAttempts, attemptsBeforeDisconnect);
+      expect(syncClient.state, SocketState.disconnected);
+    });
+
+    test('state transitions and watchState stream', () async {
+      unawaited(() async {
+        await for (final req in server) {
+          final ws = await WebSocketTransformer.upgrade(req);
+          final channel = IOWebSocketChannel(ws);
+          CrdtSync.server(serverCrdt, channel);
+        }
+      }());
+
+      final client = MapCrdt(['test']);
+      final stateChanges = <SocketState>[];
+      final connected = Completer<void>();
+      final disconnected = Completer<void>();
+
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://localhost:$port'),
+        onConnect: (_, __) => connected.complete(),
+        onDisconnect: (_, __, ___) => disconnected.complete(),
+      );
+
+      final subscription = syncClient.watchState.listen(stateChanges.add);
+
+      try {
+        expect(syncClient.state, SocketState.disconnected);
+
+        syncClient.connect();
+        await connected.future.timeout(Duration(seconds: 5));
+
+        expect(syncClient.state, SocketState.connected);
+
+        await syncClient.disconnect();
+        await disconnected.future.timeout(Duration(seconds: 5));
+
+        expect(syncClient.state, SocketState.disconnected);
+
+        // Verify state change sequence
+        expect(
+            stateChanges,
+            containsAllInOrder([
+              SocketState.connecting,
+              SocketState.connected,
+              SocketState.disconnected,
+            ]));
+      } finally {
+        await subscription.cancel();
+      }
+    });
+
+    test('data persistence across reconnections', () async {
+      var serverConnections = 0;
+      late IOWebSocketChannel firstConnection;
+
+      unawaited(() async {
+        await for (final req in server) {
+          serverConnections++;
+          final ws = await WebSocketTransformer.upgrade(req);
+          final channel = IOWebSocketChannel(ws);
+
+          if (serverConnections == 1) {
+            firstConnection = channel;
+          }
+
+          CrdtSync.server(serverCrdt, channel);
+        }
+      }());
+
+      final client = MapCrdt(['test']);
+      final connected = Completer<void>();
+      final disconnected = Completer<void>();
+      final reconnected = Completer<void>();
+      final dataReplicated = Completer<void>();
+      var connectCount = 0;
+
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://localhost:$port'),
+        onConnect: (_, __) {
+          connectCount++;
+          if (connectCount == 1) {
+            connected.complete();
+          } else if (connectCount == 2) {
+            reconnected.complete();
+          }
+        },
+        onDisconnect: (_, __, ___) {
+          if (!disconnected.isCompleted) disconnected.complete();
+        },
+      );
+
+      syncClient.connect();
+      await connected.future.timeout(Duration(seconds: 5));
+
+      // Add data while connected
+      await client.put('test', 'offline_data', {'created': 'while_connected'});
+
+      // Force disconnect
+      await firstConnection.sink.close();
+      await disconnected.future.timeout(Duration(seconds: 5));
+
+      // Add data while disconnected
+      await client
+          .put('test', 'offline_data2', {'created': 'while_disconnected'});
+
+      // Monitor server for data arrival after reconnection
+      final subscription = serverCrdt.onTablesChanged.listen((event) {
+        if (event.tables.contains('test')) {
+          final records = serverCrdt.getChangeset()['test'] ?? [];
+          if (records.length >= 2 && !dataReplicated.isCompleted) {
+            dataReplicated.complete();
+          }
+        }
+      });
+
+      // Wait for automatic reconnection
+      await reconnected.future.timeout(Duration(seconds: 10));
+
+      // Wait for offline data to sync
+      await dataReplicated.future.timeout(Duration(seconds: 5));
+      await subscription.cancel();
+
+      // Verify all data reached server
+      final serverRecords = serverCrdt.getChangeset()['test'] ?? [];
+      expect(serverRecords.length, 2);
+
+      final keys = serverRecords.map((r) => r['key']).toSet();
+      expect(keys, containsAll(['offline_data', 'offline_data2']));
+
+      await syncClient.disconnect();
+    });
+
+    test('connection failure with invalid URI', () async {
+      final client = MapCrdt(['test']);
+      final stateChanges = <SocketState>[];
+
+      final syncClient = CrdtSyncClient(
+        client,
+        Uri.parse('ws://nonexistent.example.com:12345'),
+        onConnecting: () => stateChanges.add(SocketState.connecting),
+        onConnect: (_, __) => stateChanges.add(SocketState.connected),
+        onDisconnect: (_, __, ___) =>
+            stateChanges.add(SocketState.disconnected),
+      );
+
+      final subscription = syncClient.watchState.listen(stateChanges.add);
+
+      try {
+        syncClient.connect();
+
+        // Wait for multiple failed connection attempts
+        await Future.delayed(Duration(seconds: 8));
+
+        await syncClient.disconnect();
+
+        // Should have attempted to connect multiple times
+        final connectingCount =
+            stateChanges.where((s) => s == SocketState.connecting).length;
+        expect(connectingCount, greaterThan(1));
+
+        // Should never have connected
+        expect(stateChanges.contains(SocketState.connected), isFalse);
+
+        // Should have disconnected after manual disconnect
+        expect(stateChanges.contains(SocketState.disconnected), isTrue);
+      } finally {
+        await subscription.cancel();
+      }
+    });
+  });
+}
