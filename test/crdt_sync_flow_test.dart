@@ -154,20 +154,20 @@ void main() {
 
     final crdtClient = MapCrdt(['t']);
 
-    final stateChanges = <SocketState>[];
+    final stateChanges = <ConnectionState>[];
     final connected = Completer<void>();
     final disconnected = Completer<void>();
 
-    final client = CrdtSyncClient(
+    final client = CrdtSyncClient.websocket(
       crdtClient,
       Uri.parse('ws://localhost:$port'),
-      onConnecting: () => stateChanges.add(SocketState.connecting),
+      onConnecting: () => stateChanges.add(ConnectionState.connecting),
       onConnect: (_, __) {
-        stateChanges.add(SocketState.connected);
+        stateChanges.add(ConnectionState.connected);
         connected.complete();
       },
       onDisconnect: (_, __, ___) {
-        stateChanges.add(SocketState.disconnected);
+        stateChanges.add(ConnectionState.disconnected);
         if (!disconnected.isCompleted) disconnected.complete();
       },
     );
@@ -182,19 +182,19 @@ void main() {
       ]);
 
       // Verify connection state
-      expect(client.state, SocketState.connected);
+      expect(client.state, ConnectionState.connected);
 
       // Disconnect explicitly
       await client.disconnect(4000, 'bye');
       await disconnected.future.timeout(Duration(seconds: 5));
 
       // Verify final state
-      expect(client.state, SocketState.disconnected);
+      expect(client.state, ConnectionState.disconnected);
 
       // Verify expected state changes occurred
-      expect(stateChanges.contains(SocketState.connecting), isTrue);
-      expect(stateChanges.contains(SocketState.connected), isTrue);
-      expect(stateChanges.contains(SocketState.disconnected), isTrue);
+      expect(stateChanges.contains(ConnectionState.connecting), isTrue);
+      expect(stateChanges.contains(ConnectionState.connected), isTrue);
+      expect(stateChanges.contains(ConnectionState.disconnected), isTrue);
     } finally {
       // Cleanup
       await stateSubscription.cancel();

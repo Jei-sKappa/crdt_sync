@@ -46,19 +46,19 @@ void main() {
       }());
 
       final client = MapCrdt(['test']);
-      final stateChanges = <SocketState>[];
+      final stateChanges = <ConnectionState>[];
       final connected = Completer<void>();
 
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
-        onConnecting: () => stateChanges.add(SocketState.connecting),
+        onConnecting: () => stateChanges.add(ConnectionState.connecting),
         onConnect: (_, __) {
-          stateChanges.add(SocketState.connected);
+          stateChanges.add(ConnectionState.connected);
           connected.complete();
         },
         onDisconnect: (_, __, ___) =>
-            stateChanges.add(SocketState.disconnected),
+            stateChanges.add(ConnectionState.disconnected),
       );
 
       syncClient.connect();
@@ -80,9 +80,9 @@ void main() {
       }
 
       // Verify final state
-      expect(syncClient.state, SocketState.connected);
-      expect(stateChanges.contains(SocketState.connecting), isTrue);
-      expect(stateChanges.contains(SocketState.connected), isTrue);
+      expect(syncClient.state, ConnectionState.connected);
+      expect(stateChanges.contains(ConnectionState.connecting), isTrue);
+      expect(stateChanges.contains(ConnectionState.connected), isTrue);
 
       await syncClient.disconnect();
     });
@@ -111,7 +111,7 @@ void main() {
       final reconnected = Completer<void>();
       var connectCount = 0;
 
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
         onConnect: (_, __) {
@@ -139,7 +139,7 @@ void main() {
 
       expect(serverConnections, 2);
       expect(connectCount, 2);
-      expect(syncClient.state, SocketState.connected);
+      expect(syncClient.state, ConnectionState.connected);
 
       await syncClient.disconnect();
     });
@@ -157,7 +157,7 @@ void main() {
       }());
 
       final client = MapCrdt(['test']);
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
       );
@@ -176,7 +176,7 @@ void main() {
       await Future.delayed(Duration(seconds: 3));
 
       expect(connectionAttempts, attemptsBeforeDisconnect);
-      expect(syncClient.state, SocketState.disconnected);
+      expect(syncClient.state, ConnectionState.disconnected);
     });
 
     test('state transitions and watchState stream', () async {
@@ -189,11 +189,11 @@ void main() {
       }());
 
       final client = MapCrdt(['test']);
-      final stateChanges = <SocketState>[];
+      final stateChanges = <ConnectionState>[];
       final connected = Completer<void>();
       final disconnected = Completer<void>();
 
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
         onConnect: (_, __) => connected.complete(),
@@ -203,25 +203,25 @@ void main() {
       final subscription = syncClient.watchState.listen(stateChanges.add);
 
       try {
-        expect(syncClient.state, SocketState.disconnected);
+        expect(syncClient.state, ConnectionState.disconnected);
 
         syncClient.connect();
         await connected.future.timeout(Duration(seconds: 5));
 
-        expect(syncClient.state, SocketState.connected);
+        expect(syncClient.state, ConnectionState.connected);
 
         await syncClient.disconnect();
         await disconnected.future.timeout(Duration(seconds: 5));
 
-        expect(syncClient.state, SocketState.disconnected);
+        expect(syncClient.state, ConnectionState.disconnected);
 
         // Verify state change sequence
         expect(
             stateChanges,
             containsAllInOrder([
-              SocketState.connecting,
-              SocketState.connected,
-              SocketState.disconnected,
+              ConnectionState.connecting,
+              ConnectionState.connected,
+              ConnectionState.disconnected,
             ]));
       } finally {
         await subscription.cancel();
@@ -253,7 +253,7 @@ void main() {
       final dataReplicated = Completer<void>();
       var connectCount = 0;
 
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
         onConnect: (_, __) {
@@ -312,15 +312,15 @@ void main() {
 
     test('connection failure with invalid URI', () async {
       final client = MapCrdt(['test']);
-      final stateChanges = <SocketState>[];
+      final stateChanges = <ConnectionState>[];
 
-      final syncClient = CrdtSyncClient(
+      final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://nonexistent.example.com:12345'),
-        onConnecting: () => stateChanges.add(SocketState.connecting),
-        onConnect: (_, __) => stateChanges.add(SocketState.connected),
+        onConnecting: () => stateChanges.add(ConnectionState.connecting),
+        onConnect: (_, __) => stateChanges.add(ConnectionState.connected),
         onDisconnect: (_, __, ___) =>
-            stateChanges.add(SocketState.disconnected),
+            stateChanges.add(ConnectionState.disconnected),
       );
 
       final subscription = syncClient.watchState.listen(stateChanges.add);
@@ -335,14 +335,14 @@ void main() {
 
         // Should have attempted to connect multiple times
         final connectingCount =
-            stateChanges.where((s) => s == SocketState.connecting).length;
+            stateChanges.where((s) => s == ConnectionState.connecting).length;
         expect(connectingCount, greaterThan(1));
 
         // Should never have connected
-        expect(stateChanges.contains(SocketState.connected), isFalse);
+        expect(stateChanges.contains(ConnectionState.connected), isFalse);
 
         // Should have disconnected after manual disconnect
-        expect(stateChanges.contains(SocketState.disconnected), isTrue);
+        expect(stateChanges.contains(ConnectionState.disconnected), isTrue);
       } finally {
         await subscription.cancel();
       }

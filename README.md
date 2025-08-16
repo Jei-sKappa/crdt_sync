@@ -35,10 +35,22 @@ See [tudo_server](https://github.com/cachapa/tudo_server) for a real world examp
 
 ### Client
 
-Instantiate a `CrdtSyncClient` and order it to start connecting:
+For WebSocket connections, instantiate a `CrdtSyncClient.websocket` and order it to start connecting:
 
 ```dart
-final client = CrdtSyncClient(crdt, Uri.parse('ws://localhost:8080'));
+final client = CrdtSyncClient.websocket(crdt, Uri.parse('ws://localhost:8080'));
+client.connect();
+```
+
+For custom transports, provide a channel factory:
+
+```dart
+final client = CrdtSyncClient(
+  crdt,
+  () async {
+    // Your custom channel creation logic here
+  },
+);
 client.connect();
 ```
 
@@ -57,22 +69,32 @@ Serverpod uses streaming endpoint methods instead of exposing raw WebSockets. `c
 Client-side (inside your Serverpod client app):
 
 ```dart
-// Acquire a Serverpod streaming method pair
+// Option 1: One-time sync
 final inController = StreamController<String>();
 final outStream = client.example.echoStream(inController.stream);
-
-// Wrap as a SyncChannel
 final channel = DuplexStreamChannel(
   incoming: outStream,
   outgoing: inController.sink,
 );
-
-// Start sync over the channel
 CrdtSync.client(
   crdt,
   channel,
   handshakeDataBuilder: () => {'some': 'metadata'},
 );
+
+// Option 2: Auto-reconnect sync client
+final syncClient = CrdtSyncClient(
+  crdt,
+  () async {
+    final inController = StreamController<String>();
+    final outStream = client.example.echoStream(inController.stream);
+    return DuplexStreamChannel(
+      incoming: outStream,
+      outgoing: inController.sink,
+    );
+  },
+);
+syncClient.connect();
 ```
 
 Server-side (inside a Serverpod endpoint):

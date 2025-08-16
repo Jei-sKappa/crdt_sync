@@ -39,7 +39,7 @@ Future<void> main(List<String> args) async {
     );
   } else {
     // ignore: unawaited_futures
-    CrdtSyncClient(
+    CrdtSyncClient.websocket(
       crdt,
       Uri.parse('ws://${args.first}'),
       handshakeDataBuilder: () => {'name': author},
