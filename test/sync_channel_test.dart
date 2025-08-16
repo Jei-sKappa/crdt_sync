@@ -44,7 +44,7 @@ void main() {
       final serverDone = Completer<void>();
 
       // Echo server
-      () async {
+      unawaited(() async {
         final request = await server.first;
         final socket = await WebSocketTransformer.upgrade(request);
         final channel = IOWebSocketChannel(socket);
@@ -54,7 +54,7 @@ void main() {
           await server.close(force: true);
           serverDone.complete();
         });
-      }();
+      }());
 
       final uri = Uri.parse('ws://localhost:${server.port}');
       final client = IOWebSocketChannel.connect(uri);

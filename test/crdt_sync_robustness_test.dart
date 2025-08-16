@@ -257,7 +257,7 @@ void main() {
       final disconnected = Completer<void>();
 
       // Accept connection and set up server with ping interval
-      () async {
+      unawaited(() async {
         final request = await httpServer.first;
         await upgrade(
           crdtServer,
@@ -270,7 +270,7 @@ void main() {
             if (!disconnected.isCompleted) disconnected.complete();
           },
         );
-      }();
+      }());
 
       // Proper WebSocket client using CrdtSync to ensure handshake completes
       final client = MapCrdt(['t']);

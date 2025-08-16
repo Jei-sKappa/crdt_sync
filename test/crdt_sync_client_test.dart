@@ -22,7 +22,7 @@ void main() {
       await server.close(force: true);
     });
 
-    test('exponential backoff reconnection strategy', () async { // 3sec
+    test('exponential backoff reconnection strategy', () async {
       var connectionAttempts = 0;
       final connectionTimes = <DateTime>[];
 
@@ -89,7 +89,7 @@ void main() {
       await syncClient.disconnect();
     });
 
-    test('reconnection after unexpected disconnect', () async { // 1 sec
+    test('reconnection after unexpected disconnect', () async {
       var serverConnections = 0;
       late IOWebSocketChannel firstConnection;
 
@@ -148,7 +148,7 @@ void main() {
       await syncClient.disconnect();
     });
 
-    test('manual disconnect stops automatic reconnection', () async { // 4 sec
+    test('manual disconnect stops automatic reconnection', () async {
       var connectionAttempts = 0;
 
       // Server that always rejects connections
@@ -185,7 +185,7 @@ void main() {
       expect(syncClient.state, ConnectionState.disconnected);
     });
 
-    test('state transitions and watchState stream', () async { // 0 sec
+    test('state transitions and watchState stream', () async {
       unawaited(() async {
         await for (final req in server) {
           final ws = await WebSocketTransformer.upgrade(req);
@@ -236,7 +236,7 @@ void main() {
       }
     });
 
-    test('data persistence across reconnections', () async { // 1 sec
+    test('data persistence across reconnections', () async {
       var serverConnections = 0;
       late IOWebSocketChannel firstConnection;
 

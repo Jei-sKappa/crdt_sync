@@ -249,8 +249,9 @@ void main() {
         pairA1.a,
         onConnect: (_, __) {
           connections++;
-          if (connections == 3 && !connected1.isCompleted)
+          if (connections == 3 && !connected1.isCompleted) {
             connected1.complete();
+          }
         },
       );
       CrdtSync.server(
@@ -258,8 +259,9 @@ void main() {
         pairB.a,
         onConnect: (_, __) {
           connections++;
-          if (connections == 3 && !connected1.isCompleted)
+          if (connections == 3 && !connected1.isCompleted) {
             connected1.complete();
+          }
         },
       );
       CrdtSync.client(
@@ -267,8 +269,9 @@ void main() {
         pairA1.b,
         onConnect: (_, __) {
           connections++;
-          if (connections == 3 && !connected1.isCompleted)
+          if (connections == 3 && !connected1.isCompleted) {
             connected1.complete();
+          }
         },
       );
       CrdtSync.client(clientB, pairB.b);
