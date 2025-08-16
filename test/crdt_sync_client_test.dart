@@ -22,7 +22,7 @@ void main() {
       await server.close(force: true);
     });
 
-    test('exponential backoff reconnection strategy', () async {
+    test('exponential backoff reconnection strategy', () async { // 3sec
       var connectionAttempts = 0;
       final connectionTimes = <DateTime>[];
 
@@ -59,10 +59,12 @@ void main() {
         },
         onDisconnect: (_, __, ___) =>
             stateChanges.add(ConnectionState.disconnected),
+        minReconnectDelay: 1,
+        maxReconnectDelay: 4,
       );
 
       syncClient.connect();
-      await connected.future.timeout(Duration(seconds: 15));
+      await connected.future.timeout(Duration(seconds: 8));
 
       // Verify exponential backoff occurred
       expect(connectionAttempts, 3);
@@ -71,12 +73,12 @@ void main() {
       // Check that delays increased (allowing some tolerance for timing)
       if (connectionTimes.length >= 3) {
         final delay1 =
-            connectionTimes[1].difference(connectionTimes[0]).inSeconds;
+            connectionTimes[1].difference(connectionTimes[0]).inMilliseconds;
         final delay2 =
-            connectionTimes[2].difference(connectionTimes[1]).inSeconds;
+            connectionTimes[2].difference(connectionTimes[1]).inMilliseconds;
 
-        expect(delay1, greaterThanOrEqualTo(1)); // First retry after ~2s
-        expect(delay2, greaterThanOrEqualTo(3)); // Second retry after ~4s
+        expect(delay1, greaterThanOrEqualTo(800)); // First retry after ~1s
+        expect(delay2, greaterThanOrEqualTo(1800)); // Second retry after ~2s
       }
 
       // Verify final state
@@ -87,7 +89,7 @@ void main() {
       await syncClient.disconnect();
     });
 
-    test('reconnection after unexpected disconnect', () async {
+    test('reconnection after unexpected disconnect', () async { // 1 sec
       var serverConnections = 0;
       late IOWebSocketChannel firstConnection;
 
@@ -125,6 +127,8 @@ void main() {
         onDisconnect: (_, __, ___) {
           if (!disconnected.isCompleted) disconnected.complete();
         },
+        minReconnectDelay: 1,
+        maxReconnectDelay: 4,
       );
 
       syncClient.connect();
@@ -144,7 +148,7 @@ void main() {
       await syncClient.disconnect();
     });
 
-    test('manual disconnect stops automatic reconnection', () async {
+    test('manual disconnect stops automatic reconnection', () async { // 4 sec
       var connectionAttempts = 0;
 
       // Server that always rejects connections
@@ -160,12 +164,14 @@ void main() {
       final syncClient = CrdtSyncClient.websocket(
         client,
         Uri.parse('ws://localhost:$port'),
+        minReconnectDelay: 1,
+        maxReconnectDelay: 1,
       );
 
       syncClient.connect();
 
       // Let it try to connect for a bit
-      await Future.delayed(Duration(seconds: 1));
+      await Future.delayed(Duration(milliseconds: 1500));
 
       // Manually disconnect
       await syncClient.disconnect();
@@ -173,13 +179,13 @@ void main() {
       final attemptsBeforeDisconnect = connectionAttempts;
 
       // Wait a bit more and verify no more connection attempts
-      await Future.delayed(Duration(seconds: 3));
+      await Future.delayed(Duration(milliseconds: 1500));
 
       expect(connectionAttempts, attemptsBeforeDisconnect);
       expect(syncClient.state, ConnectionState.disconnected);
     });
 
-    test('state transitions and watchState stream', () async {
+    test('state transitions and watchState stream', () async { // 0 sec
       unawaited(() async {
         await for (final req in server) {
           final ws = await WebSocketTransformer.upgrade(req);
@@ -198,6 +204,8 @@ void main() {
         Uri.parse('ws://localhost:$port'),
         onConnect: (_, __) => connected.complete(),
         onDisconnect: (_, __, ___) => disconnected.complete(),
+        minReconnectDelay: 1,
+        maxReconnectDelay: 4,
       );
 
       final subscription = syncClient.watchState.listen(stateChanges.add);
@@ -228,7 +236,7 @@ void main() {
       }
     });
 
-    test('data persistence across reconnections', () async {
+    test('data persistence across reconnections', () async { // 1 sec
       var serverConnections = 0;
       late IOWebSocketChannel firstConnection;
 
@@ -267,6 +275,8 @@ void main() {
         onDisconnect: (_, __, ___) {
           if (!disconnected.isCompleted) disconnected.complete();
         },
+        minReconnectDelay: 1,
+        maxReconnectDelay: 4,
       );
 
       syncClient.connect();
@@ -321,6 +331,8 @@ void main() {
         onConnect: (_, __) => stateChanges.add(ConnectionState.connected),
         onDisconnect: (_, __, ___) =>
             stateChanges.add(ConnectionState.disconnected),
+        minReconnectDelay: 1,
+        maxReconnectDelay: 1,
       );
 
       final subscription = syncClient.watchState.listen(stateChanges.add);
@@ -329,7 +341,7 @@ void main() {
         syncClient.connect();
 
         // Wait for multiple failed connection attempts
-        await Future.delayed(Duration(seconds: 8));
+        await Future.delayed(Duration(milliseconds: 1500));
 
         await syncClient.disconnect();
 

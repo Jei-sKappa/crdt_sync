@@ -170,6 +170,8 @@ void main() {
         stateChanges.add(ConnectionState.disconnected);
         if (!disconnected.isCompleted) disconnected.complete();
       },
+      minReconnectDelay: 1,
+      maxReconnectDelay: 4,
     );
 
     final stateSubscription = client.watchState.listen(stateChanges.add);
