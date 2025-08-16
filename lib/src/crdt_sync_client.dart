@@ -7,8 +7,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'crdt_sync.dart';
 import 'sync_channel.dart';
 
-const _minDelay = 2; // In seconds. Minimum is 2 because 1² = 1.
-const _maxDelay = 10;
+const _defaultMinDelay = 2; // In seconds. Minimum is 2 because 1² = 1.
+const _defaultMaxDelay = 10;
 
 enum ConnectionState { disconnected, connecting, connected }
 
@@ -27,6 +27,8 @@ class CrdtSyncClient {
   final OnChangeset? onChangesetReceived;
   final OnChangeset? onChangesetSent;
   final bool verbose;
+  final int minReconnectDelay;
+  final int maxReconnectDelay;
 
   CrdtSync? _crdtSync;
 
@@ -34,7 +36,7 @@ class CrdtSyncClient {
   var _state = ConnectionState.disconnected;
   final _stateController = StreamController<ConnectionState>.broadcast();
 
-  var _reconnectDelay = _minDelay; // in seconds
+  late int _reconnectDelay; // in seconds
   Timer? _reconnectTimer;
 
   /// Get the current connection state.
@@ -51,6 +53,9 @@ class CrdtSyncClient {
   /// The [channelFactory] is called each time a connection attempt is made.
   /// It should create and return a new [SyncChannel] instance.
   ///
+  /// [minReconnectDelay] and [maxReconnectDelay] control the exponential backoff
+  /// reconnection strategy (in seconds). Defaults to 2 and 10 seconds respectively.
+  ///
   /// See [CrdtSync.client] for a description of the remaining parameters.
   CrdtSyncClient(
     this.crdt,
@@ -65,7 +70,9 @@ class CrdtSyncClient {
     this.onChangesetReceived,
     this.onChangesetSent,
     this.verbose = false,
-  });
+    this.minReconnectDelay = _defaultMinDelay,
+    this.maxReconnectDelay = _defaultMaxDelay,
+  }) : _reconnectDelay = minReconnectDelay;
 
   /// Creates a WebSocket-based client.
   ///
@@ -84,6 +91,8 @@ class CrdtSyncClient {
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
+    int minReconnectDelay = _defaultMinDelay,
+    int maxReconnectDelay = _defaultMaxDelay,
   }) {
     assert({'ws', 'wss'}.contains(uri.scheme));
     return CrdtSyncClient(
@@ -103,6 +112,8 @@ class CrdtSyncClient {
       onChangesetReceived: onChangesetReceived,
       onChangesetSent: onChangesetSent,
       verbose: verbose,
+      minReconnectDelay: minReconnectDelay,
+      maxReconnectDelay: maxReconnectDelay,
     );
   }
 
@@ -127,7 +138,7 @@ class CrdtSyncClient {
         validateRecord: validateRecord,
         mapIncomingChangeset: mapIncomingChangeset,
         onConnect: (remoteNodeId, remoteInfo) {
-          _reconnectDelay = _minDelay;
+          _reconnectDelay = minReconnectDelay;
           _setState(ConnectionState.connected);
           onConnect?.call(remoteNodeId, remoteInfo);
         },
@@ -153,7 +164,7 @@ class CrdtSyncClient {
     if (!_onlineMode) return;
     _onlineMode = false;
     _reconnectTimer?.cancel();
-    _reconnectDelay = _minDelay;
+    _reconnectDelay = minReconnectDelay;
 
     await _crdtSync?.close(code, reason);
     _setState(ConnectionState.disconnected);
@@ -164,7 +175,7 @@ class CrdtSyncClient {
       _reconnectTimer =
           Timer(Duration(seconds: _reconnectDelay), () => connect());
       _log('Reconnecting in ${_reconnectDelay}s…');
-      _reconnectDelay = min(_reconnectDelay * 2, _maxDelay);
+      _reconnectDelay = min(_reconnectDelay * 2, maxReconnectDelay);
     }
   }
 

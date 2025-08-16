@@ -54,6 +54,17 @@ final client = CrdtSyncClient(
 client.connect();
 ```
 
+The client uses exponential backoff for reconnection (defaults to 2-10 seconds). For testing or faster reconnection, you can customize the delays:
+
+```dart
+final client = CrdtSyncClient.websocket(
+  crdt,
+  Uri.parse('ws://localhost:8080'),
+  minReconnectDelay: 1, // Start with 1 second
+  maxReconnectDelay: 5, // Cap at 5 seconds
+);
+```
+
 Once `connect()` is called, the client will continuously attempt to establish or resume a connection until it succeeds, or until `disconnect()` is called.
 
 See the included [example](https://github.com/cachapa/crdt_sync/blob/master/example/example.dart) for a more complete solution, or [tudo](https://github.com/cachapa/tudo) for a real-world application.
