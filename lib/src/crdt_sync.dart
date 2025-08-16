@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:crdt/crdt.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'sync_socket.dart';
+import 'sync_protocol.dart';
 import 'sync_channel.dart';
 
 typedef ClientHandshakeDataBuilder = FutureOr<Object>? Function();
@@ -37,7 +37,7 @@ class CrdtSync {
   final OnChangeset? onChangesetSent;
   final bool verbose;
 
-  late final SyncSocket _syncSocket;
+  late final SyncProtocol _syncProtocol;
   String? _peerId;
 
   /// Represents the nodeId from the remote peer connected to this socket.
@@ -225,7 +225,7 @@ class CrdtSync {
   Future<void> _handle(SyncChannel channel) async {
     StreamSubscription? localSubscription;
 
-    _syncSocket = SyncSocket(
+    _syncProtocol = SyncProtocol(
       channel,
       crdt.nodeId,
       onDisconnect: (code, reason) {
@@ -263,7 +263,7 @@ class CrdtSync {
       _sendChangeset(changeset);
     } catch (e, st) {
       await localSubscription?.cancel();
-      await _syncSocket.close();
+      await _syncProtocol.close();
       _logException(e, st);
     }
   }
@@ -274,21 +274,21 @@ class CrdtSync {
   /// See https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code for
   /// a list of permissible codes.
   Future<void> close([int? code, String? reason]) =>
-      _syncSocket.close(code, reason);
+      _syncProtocol.close(code, reason);
 
   Future<Handshake> _performHandshake() async {
     if (isClient) {
       // Introduce ourselves
-      _syncSocket.sendHandshake(
+      _syncProtocol.sendHandshake(
         crdt.nodeId,
         await crdt.getLastModified(exceptNodeId: crdt.nodeId),
         await clientHandshakeDataBuilder?.call(),
       );
-      return await _syncSocket.receiveHandshake();
+      return await _syncProtocol.receiveHandshake();
     } else {
       // A good client always introduces itself first
-      final handshake = await _syncSocket.receiveHandshake();
-      _syncSocket.sendHandshake(
+      final handshake = await _syncProtocol.receiveHandshake();
+      _syncProtocol.sendHandshake(
         crdt.nodeId,
         await crdt.getLastModified(onlyNodeId: handshake.nodeId),
         await serverHandshakeDataBuilder?.call(
@@ -300,7 +300,7 @@ class CrdtSync {
 
   void _sendChangeset(CrdtChangeset changeset) {
     if (changeset.recordCount == 0) return;
-    _syncSocket.sendChangeset(changeset);
+    _syncProtocol.sendChangeset(changeset);
     onChangesetSent?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
   }
