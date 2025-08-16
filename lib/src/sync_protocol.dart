@@ -33,22 +33,29 @@ class SyncProtocol {
     required this.onChangeset,
     required this.verbose,
   }) {
-    _subscription = channel.stream.map((e) => jsonDecode(e)).listen(
-      (message) async {
-        _log('⬇️ $message');
-        if (!_handshakeCompleter.isCompleted) {
-          // The first message is a handshake
-          _handshakeCompleter.complete((
-            nodeId: message['node_id'] as String,
-            // Modified timestamps always use the local node id
-            lastModified: Hlc.parse(message['last_modified'] as String)
-                .apply(nodeId: localNodeId),
-            data: message['data'] as Map<String, dynamic>?
-          ));
-        } else {
-          // Merge into crdt
-          final changeset = parseCrdtChangeset(message);
-          onChangeset(changeset);
+    _subscription = channel.stream.listen(
+      (raw) async {
+        try {
+          final message = jsonDecode(raw);
+          _log('⬇️ $message');
+          if (!_handshakeCompleter.isCompleted) {
+            // The first message is a handshake
+            _handshakeCompleter.complete((
+              nodeId: message['node_id'] as String,
+              // Modified timestamps always use the local node id
+              lastModified: Hlc.parse(message['last_modified'] as String)
+                  .apply(nodeId: localNodeId),
+              data: message['data'] as Map<String, dynamic>?
+            ));
+          } else {
+            // Merge into crdt
+            final changeset = parseCrdtChangeset(message);
+            onChangeset(changeset);
+          }
+        } catch (e, _) {
+          _log('$e');
+          // Close gracefully on malformed messages
+          await close(4000, '$e');
         }
       },
       cancelOnError: true,

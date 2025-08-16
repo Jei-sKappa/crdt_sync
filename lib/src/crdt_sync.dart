@@ -311,24 +311,42 @@ class CrdtSync {
       final validatedChangeset = <String, CrdtTableChangeset>{};
       for (final entry in changeset.entries) {
         final table = entry.key;
-        final records = (await Future.wait(entry.value
-                .map((e) async => await validateRecord!(table, e) ? e : null)))
-            .nonNulls
-            .toList();
-        if (records.isNotEmpty) validatedChangeset[table] = records;
+        final validatedRecords = <CrdtRecord>[];
+        for (final record in entry.value) {
+          try {
+            final isValid = await validateRecord!(table, record);
+            if (isValid) validatedRecords.add(record);
+          } catch (e, st) {
+            _logException(e, st);
+            // Skip records that cause validator exceptions
+          }
+        }
+        if (validatedRecords.isNotEmpty) {
+          validatedChangeset[table] = validatedRecords;
+        }
       }
       changeset = validatedChangeset;
     }
 
     // Allow implementation to intercept and modify records
     if (mapIncomingChangeset != null) {
-      changeset = changeset.map(
-        (table, records) => MapEntry(
-            table,
-            records
-                .map((record) => mapIncomingChangeset!(table, record))
-                .toList()),
-      );
+      final mappedChangeset = <String, CrdtTableChangeset>{};
+      for (final entry in changeset.entries) {
+        final table = entry.key;
+        final mappedRecords = <CrdtRecord>[];
+        for (final record in entry.value) {
+          try {
+            mappedRecords.add(mapIncomingChangeset!(table, record));
+          } catch (e, st) {
+            _logException(e, st);
+            // Skip records that cause mapper exceptions
+          }
+        }
+        if (mappedRecords.isNotEmpty) {
+          mappedChangeset[table] = mappedRecords;
+        }
+      }
+      changeset = mappedChangeset;
     }
 
     // Notify and merge
