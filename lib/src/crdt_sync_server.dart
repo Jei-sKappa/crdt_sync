@@ -6,7 +6,7 @@ import 'package:web_socket_channel/io.dart';
 
 import 'crdt_sync.dart';
 
-const defaultPingInterval = Duration(seconds: 20);
+const _defaultPingInterval = Duration(seconds: 20);
 
 typedef ServerOnConnect = void Function(CrdtSync crdtSync, Object? customData);
 
@@ -27,7 +27,7 @@ typedef ServerOnConnect = void Function(CrdtSync crdtSync, Object? customData);
 Future<void> listen(
   Crdt crdt,
   int port, {
-  Duration? pingInterval = defaultPingInterval,
+  Duration? pingInterval = _defaultPingInterval,
   ServerHandshakeDataBuilder? handshakeDataBuilder,
   ChangesetBuilder? changesetBuilder,
   RecordValidator? validateRecord,
@@ -74,7 +74,7 @@ Future<void> listen(
 Future<void> upgrade(
   Crdt crdt,
   HttpRequest request, {
-  Duration? pingInterval = defaultPingInterval,
+  Duration? pingInterval = _defaultPingInterval,
   ServerHandshakeDataBuilder? handshakeDataBuilder,
   ChangesetBuilder? changesetBuilder,
   RecordValidator? validateRecord,
@@ -89,7 +89,7 @@ Future<void> upgrade(
       IOWebSocketChannel(await WebSocketTransformer.upgrade(request)
         ..pingInterval = pingInterval);
   late final CrdtSync crdtSync;
-  crdtSync = CrdtSync.server(
+  crdtSync = CrdtSync.websocketServer(
     crdt,
     webSocket,
     handshakeDataBuilder: handshakeDataBuilder,

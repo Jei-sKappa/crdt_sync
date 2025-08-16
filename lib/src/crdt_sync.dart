@@ -43,8 +43,7 @@ class CrdtSync {
   /// Represents the nodeId from the remote peer connected to this socket.
   String? get peerId => _peerId;
 
-  /// Takes an established [WebSocket] connection to start synchronizing the
-  /// supplied [crdt] with a remote CrdtSync instance.
+  /// Starts synchronization over a generic [SyncChannel] on the client side.
   ///
   /// Use [handshakeDataBuilder] to send connection metadata on the first frame.
   /// This can be useful to send server identifiers, or verification tokens.
@@ -73,6 +72,40 @@ class CrdtSync {
   /// Set [verbose] to true to spam your output with raw record payloads.
   CrdtSync.client(
     Crdt crdt,
+    SyncChannel channel, {
+    ClientHandshakeDataBuilder? handshakeDataBuilder,
+    ChangesetBuilder? changesetBuilder,
+    RecordValidator? validateRecord,
+    ChangesetMapper? mapIncomingChangeset,
+    OnConnect? onConnect,
+    OnDisconnect? onDisconnect,
+    OnChangeset? onChangesetReceived,
+    OnChangeset? onChangesetSent,
+    bool verbose = false,
+  }) : this._(
+          crdt,
+          channel,
+          isClient: true,
+          clientHandshakeDataBuilder: handshakeDataBuilder,
+          changesetBuilder: changesetBuilder,
+          validateRecord: validateRecord,
+          mapIncomingChangeset: mapIncomingChangeset,
+          onConnect: onConnect,
+          onDisconnect: onDisconnect,
+          onChangesetReceived: onChangesetReceived,
+          onChangesetSent: onChangesetSent,
+          verbose: verbose,
+        );
+
+  /// Takes an established [WebSocket] connection to start synchronizing the
+  /// supplied [crdt] with a remote CrdtSync instance.
+  ///
+  /// This is a convenience wrapper around [CrdtSync.client] that automatically
+  /// wraps the WebSocket in a [WebSocketSyncChannel].
+  ///
+  /// See [CrdtSync.client] for a description of the parameters.
+  CrdtSync.websocketClient(
+    Crdt crdt,
     WebSocketChannel webSocket, {
     ClientHandshakeDataBuilder? handshakeDataBuilder,
     ChangesetBuilder? changesetBuilder,
@@ -98,11 +131,13 @@ class CrdtSync {
           verbose: verbose,
         );
 
-  /// Starts synchronization over a generic [SyncChannel] on the client side.
-  CrdtSync.clientWithChannel(
+  /// Starts synchronization over a generic [SyncChannel] on the server side.
+  ///
+  /// See [CrdtSync.client] for a description of the parameters.
+  CrdtSync.server(
     Crdt crdt,
     SyncChannel channel, {
-    ClientHandshakeDataBuilder? handshakeDataBuilder,
+    ServerHandshakeDataBuilder? handshakeDataBuilder,
     ChangesetBuilder? changesetBuilder,
     RecordValidator? validateRecord,
     ChangesetMapper? mapIncomingChangeset,
@@ -114,8 +149,8 @@ class CrdtSync {
   }) : this._(
           crdt,
           channel,
-          isClient: true,
-          clientHandshakeDataBuilder: handshakeDataBuilder,
+          isClient: false,
+          serverHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,
           validateRecord: validateRecord,
           mapIncomingChangeset: mapIncomingChangeset,
@@ -129,6 +164,9 @@ class CrdtSync {
   /// Takes an established [WebSocket] connection to start synchronizing with
   /// another CrdtSync socket.
   ///
+  /// This is a convenience wrapper around [CrdtSync.server] that automatically
+  /// wraps the WebSocket in a [WebSocketSyncChannel].
+  ///
   /// It's recommended that the supplied [socket] has a ping interval set to
   /// avoid stale connections. This can be done in the parent framework, e.g.
   /// by setting [pingInterval] in shelf_web_socket's [webSocketHandler].
@@ -136,8 +174,8 @@ class CrdtSync {
   /// Also provided are [listen] and [upgrade] as helper functions to accept new
   /// connections, and upgrade existing ones, respectively.
   ///
-  /// See [CrdtSync.client] for a description of the remaining parameters.
-  CrdtSync.server(
+  /// See [CrdtSync.server] for a description of the remaining parameters.
+  CrdtSync.websocketServer(
     Crdt crdt,
     WebSocketChannel webSocket, {
     ServerHandshakeDataBuilder? handshakeDataBuilder,
@@ -152,34 +190,6 @@ class CrdtSync {
   }) : this._(
           crdt,
           WebSocketSyncChannel(webSocket),
-          isClient: false,
-          serverHandshakeDataBuilder: handshakeDataBuilder,
-          changesetBuilder: changesetBuilder,
-          validateRecord: validateRecord,
-          mapIncomingChangeset: mapIncomingChangeset,
-          onConnect: onConnect,
-          onDisconnect: onDisconnect,
-          onChangesetReceived: onChangesetReceived,
-          onChangesetSent: onChangesetSent,
-          verbose: verbose,
-        );
-
-  /// Starts synchronization over a generic [SyncChannel] on the server side.
-  CrdtSync.serverWithChannel(
-    Crdt crdt,
-    SyncChannel channel, {
-    ServerHandshakeDataBuilder? handshakeDataBuilder,
-    ChangesetBuilder? changesetBuilder,
-    RecordValidator? validateRecord,
-    ChangesetMapper? mapIncomingChangeset,
-    OnConnect? onConnect,
-    OnDisconnect? onDisconnect,
-    OnChangeset? onChangesetReceived,
-    OnChangeset? onChangesetSent,
-    bool verbose = false,
-  }) : this._(
-          crdt,
-          channel,
           isClient: false,
           serverHandshakeDataBuilder: handshakeDataBuilder,
           changesetBuilder: changesetBuilder,

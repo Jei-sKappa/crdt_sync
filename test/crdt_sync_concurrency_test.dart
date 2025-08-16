@@ -39,7 +39,7 @@ void main() {
         }
       }
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -48,7 +48,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -120,7 +120,7 @@ void main() {
       final conflictResolved = Completer<void>();
       var connectionCount = 0;
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -129,7 +129,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -210,7 +210,7 @@ void main() {
       var connectionCount = 0;
       final changesetCounts = <int>[];
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -226,7 +226,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -283,7 +283,7 @@ void main() {
       final bulkSyncComplete = Completer<void>();
       var connectionCount = 0;
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -292,7 +292,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -353,7 +353,7 @@ void main() {
       final handshakeComplete = Completer<void>();
       var connectionCount = 0;
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -362,7 +362,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -432,7 +432,7 @@ void main() {
 
       // Start multiple server instances
       for (int i = 0; i < 3; i++) {
-        final sync = CrdtSync.serverWithChannel(
+        final sync = CrdtSync.server(
           server,
           pairs[i].a,
           onConnect: (_, __) {
@@ -454,7 +454,7 @@ void main() {
       // Start multiple clients
       final clientSyncs = <CrdtSync>[];
       for (int i = 0; i < 3; i++) {
-        final sync = CrdtSync.clientWithChannel(clients[i], pairs[i].b);
+        final sync = CrdtSync.client(clients[i], pairs[i].b);
         clientSyncs.add(sync);
       }
 

@@ -40,7 +40,7 @@ void main() {
             // Accept third connection
             final ws = await WebSocketTransformer.upgrade(req);
             final channel = IOWebSocketChannel(ws);
-            CrdtSync.server(serverCrdt, channel);
+            CrdtSync.websocketServer(serverCrdt, channel);
           }
         }
       }());
@@ -101,7 +101,7 @@ void main() {
             firstConnection = channel;
           }
 
-          CrdtSync.server(serverCrdt, channel);
+          CrdtSync.websocketServer(serverCrdt, channel);
         }
       }());
 
@@ -184,7 +184,7 @@ void main() {
         await for (final req in server) {
           final ws = await WebSocketTransformer.upgrade(req);
           final channel = IOWebSocketChannel(ws);
-          CrdtSync.server(serverCrdt, channel);
+          CrdtSync.websocketServer(serverCrdt, channel);
         }
       }());
 
@@ -242,7 +242,7 @@ void main() {
             firstConnection = channel;
           }
 
-          CrdtSync.server(serverCrdt, channel);
+          CrdtSync.websocketServer(serverCrdt, channel);
         }
       }());
 

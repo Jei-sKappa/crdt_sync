@@ -31,7 +31,7 @@ void main() {
     final validationResults = <String, bool>{};
 
     // Server rejects records where value.blocked == true and tags accepted ones
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       server,
       pair.a,
       onConnect: (_, __) {
@@ -61,7 +61,7 @@ void main() {
       verbose: true,
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       client,
       pair.b,
       onConnect: (_, __) {
@@ -108,7 +108,7 @@ void main() {
     final connected = Completer<void>();
     final disconnected = Completer<void>();
 
-    serverSync = CrdtSync.serverWithChannel(
+    serverSync = CrdtSync.server(
       server,
       pair.a,
       onConnect: (_, __) => connected.complete(),
@@ -119,7 +119,7 @@ void main() {
       },
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       client,
       pair.b,
     );
@@ -144,7 +144,7 @@ void main() {
         final ws = await WebSocketTransformer.upgrade(req);
         final channel = IOWebSocketChannel(ws);
         // Start server sync for this connection
-        CrdtSync.server(
+        CrdtSync.websocketServer(
           crdtServer,
           channel,
           onConnect: (_, __) => serverConnected.complete(),
@@ -213,7 +213,7 @@ void main() {
     var recordsValidated = 0;
     final validationResults = <String, bool>{};
 
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       server,
       pair.a,
       onConnect: (_, __) {
@@ -243,7 +243,7 @@ void main() {
       },
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       client,
       pair.b,
       onConnect: (_, __) {
@@ -286,7 +286,7 @@ void main() {
     var connectionCount = 0;
 
     // Server only sends 'public' table data
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       server,
       pair.a,
       onConnect: (_, __) {
@@ -307,7 +307,7 @@ void main() {
       },
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       client,
       pair.b,
       onConnect: (_, __) {

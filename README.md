@@ -29,7 +29,7 @@ Start listening for connections:
 listen(crdt, 8080);
 ```
 
-Alternatively, you can use `upgrade()` to adopt an `HttpRequest`, or `CrdtSync.server()` to manage a `WebSocket` directly making it easy to integrate with [Shelf](https://pub.dev/packages/shelf) and other server frameworks.
+Alternatively, you can use `upgrade()` to adopt an `HttpRequest`, or `CrdtSync.websocketServer()` to manage a `WebSocket` directly making it easy to integrate with [Shelf](https://pub.dev/packages/shelf) and other server frameworks.
 
 See [tudo_server](https://github.com/cachapa/tudo_server) for a real world example.
 
@@ -51,7 +51,8 @@ See the included [example](https://github.com/cachapa/crdt_sync/blob/master/exam
 Serverpod uses streaming endpoint methods instead of exposing raw WebSockets. `crdt_sync` supports this via a transport abstraction:
 
 - Use `DuplexStreamChannel` to adapt a pair of `Stream<String>`/`StreamSink<String>` to the sync layer.
-- Use `CrdtSync.clientWithChannel` and `CrdtSync.serverWithChannel` to start synchronization over the adapted channel.
+- Use `CrdtSync.client` and `CrdtSync.server` to start synchronization over the adapted channel.
+- For WebSocket connections, use `CrdtSync.websocketClient` and `CrdtSync.websocketServer` convenience methods.
 
 Client-side (inside your Serverpod client app):
 
@@ -67,7 +68,7 @@ final channel = DuplexStreamChannel(
 );
 
 // Start sync over the channel
-CrdtSync.clientWithChannel(
+CrdtSync.client(
   crdt,
   channel,
   handshakeDataBuilder: () => {'some': 'metadata'},
@@ -86,7 +87,7 @@ class SyncEndpoint extends Endpoint {
       incoming: fromClient,
       outgoing: toClient.sink,
     );
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       crdt,
       channel,
       handshakeDataBuilder: (peerId, peerData) => {'server': 'info'},

@@ -30,7 +30,7 @@ void main() {
     final dataReplicated = Completer<void>();
 
     // Start server
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       serverCrdt,
       pair.a,
       handshakeDataBuilder: (peerId, peerData) => {'from': 'server'},
@@ -39,7 +39,7 @@ void main() {
     );
 
     // Start client
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       clientCrdt,
       pair.b,
       handshakeDataBuilder: () => {'from': 'client'},
@@ -104,7 +104,7 @@ void main() {
       }
     }
 
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       serverCrdt,
       pair.a,
       handshakeDataBuilder: (peerId, peerData) => {
@@ -119,7 +119,7 @@ void main() {
       },
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       clientCrdt,
       pair.b,
       handshakeDataBuilder: () => {'role': 'client', 'user': 'alice'},
@@ -176,7 +176,7 @@ void main() {
     final serverConnected = Completer<Map<String, dynamic>>();
     final clientConnected = Completer<Map<String, dynamic>>();
 
-    CrdtSync.serverWithChannel(
+    CrdtSync.server(
       serverCrdt,
       pair.a,
       handshakeDataBuilder: (peerId, peerData) => {
@@ -188,7 +188,7 @@ void main() {
           serverConnected.complete(data as Map<String, dynamic>),
     );
 
-    CrdtSync.clientWithChannel(
+    CrdtSync.client(
       clientCrdt,
       pair.b,
       handshakeDataBuilder: () =>

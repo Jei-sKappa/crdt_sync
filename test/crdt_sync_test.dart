@@ -28,13 +28,13 @@ void main() {
       final clientConnected = Completer<String>();
       final dataReady = Completer<void>();
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (peerId, _) => serverConnected.complete(peerId),
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (peerId, _) => clientConnected.complete(peerId),
@@ -78,7 +78,7 @@ void main() {
       final dataReady = Completer<void>();
       var connectionCount = 0;
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -89,7 +89,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -132,7 +132,7 @@ void main() {
       var connectionCount = 0;
       var tablesReceived = <String>{};
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -141,7 +141,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (_, __) {
@@ -186,7 +186,7 @@ void main() {
       final disconnected = Completer<void>();
       late CrdtSync serverSync;
 
-      serverSync = CrdtSync.serverWithChannel(
+      serverSync = CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) {
@@ -197,7 +197,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(client, pair.b);
+      CrdtSync.client(client, pair.b);
 
       await connected.future.timeout(Duration(seconds: 2));
 
@@ -221,7 +221,7 @@ void main() {
       final serverConnected = Completer<String>();
       final clientConnected = Completer<String>();
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (peerId, _) {
@@ -231,7 +231,7 @@ void main() {
         },
       );
 
-      CrdtSync.clientWithChannel(
+      CrdtSync.client(
         client,
         pair.b,
         onConnect: (peerId, _) {
@@ -259,14 +259,14 @@ void main() {
       final connected = Completer<void>();
       final disconnected = Completer<void>();
 
-      CrdtSync.serverWithChannel(
+      CrdtSync.server(
         server,
         pair.a,
         onConnect: (_, __) => connected.complete(),
         onDisconnect: (_, __, ___) => disconnected.complete(),
       );
 
-      CrdtSync.clientWithChannel(client, pair.b);
+      CrdtSync.client(client, pair.b);
 
       await connected.future.timeout(Duration(seconds: 2));
 

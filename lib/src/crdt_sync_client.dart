@@ -75,7 +75,7 @@ class CrdtSyncClient {
     try {
       final socket = WebSocketChannel.connect(uri);
       await socket.ready;
-      _crdtSync = CrdtSync.client(
+      _crdtSync = CrdtSync.websocketClient(
         crdt,
         socket,
         handshakeDataBuilder: handshakeDataBuilder,
