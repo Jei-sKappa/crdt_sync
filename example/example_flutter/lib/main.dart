@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:example_client/example_client.dart';
 import 'package:flutter/material.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
+import 'package:crdt/map_crdt.dart';
+import 'package:crdt_sync/crdt_sync.dart';
 
 /// Sets up a global client object that can be used to talk to the server from
 /// anywhere in our app. The client is generated from your server code
@@ -12,6 +16,12 @@ import 'package:serverpod_flutter/serverpod_flutter.dart';
 late final Client client;
 
 late String serverUrl;
+
+// Global CRDT for demo, with a single 'chat' table
+final mapCrdt = MapCrdt(['chat']);
+
+// Sync client that reconnects automatically using Serverpod streaming method
+CrdtSyncClient? syncClient;
 
 void main() {
   // When you are running the app on a physical device, you need to set the
@@ -25,6 +35,23 @@ void main() {
 
   client = Client(serverUrl)
     ..connectivityMonitor = FlutterConnectivityMonitor();
+
+  // Build a duplex channel from the Serverpod streaming endpoint
+  syncClient = CrdtSyncClient(
+    mapCrdt,
+    () async {
+      // Create duplex streams
+      final toServer = StreamController<String>();
+      final fromServer = client.sync.crdtStream(toServer.stream);
+      return DuplexStreamChannel(
+        incoming: fromServer,
+        outgoing: toServer.sink,
+      );
+    },
+    // verbose: true,
+  );
+
+  syncClient!.connect();
 
   runApp(const MyApp());
 }
@@ -52,30 +79,14 @@ class MyHomePage extends StatefulWidget {
 }
 
 class MyHomePageState extends State<MyHomePage> {
-  /// Holds the last result or null if no result exists yet.
-  String? _resultMessage;
-
-  /// Holds the last error message that we've received from the server or null
-  /// if no error exists yet.
-  String? _errorMessage;
-
   final _textEditingController = TextEditingController();
 
-  /// Calls the `hello` method of the `greeting` endpoint. Will set either the
-  /// `_resultMessage` or `_errorMessage` field, depending on if the call
-  /// is successful.
-  void _callHello() async {
-    try {
-      final result = await client.greeting.hello(_textEditingController.text);
-      setState(() {
-        _errorMessage = null;
-        _resultMessage = result.message;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = '$e';
-      });
-    }
+  void _sendMessage() async {
+    final text = _textEditingController.text.trim();
+    if (text.isEmpty) return;
+    _textEditingController.clear();
+    await mapCrdt.put('chat', DateTime.now().microsecondsSinceEpoch.toString(),
+        {'text': text});
   }
 
   @override
@@ -86,59 +97,46 @@ class MyHomePageState extends State<MyHomePage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: TextField(
-                controller: _textEditingController,
-                decoration: const InputDecoration(hintText: 'Enter your name'),
+            Expanded(
+              child: StreamBuilder(
+                stream: mapCrdt.onTablesChanged,
+                builder: (context, snapshot) {
+                  final records = List.of(mapCrdt.getChangeset()['chat'] ?? [])
+                    ..sort((a, b) =>
+                        (a['key'] as String).compareTo(b['key'] as String));
+                  return ListView.builder(
+                    itemCount: records.length,
+                    itemBuilder: (context, index) {
+                      final rec = records[index];
+                      final value = rec['value'] as Map? ?? {};
+                      return ListTile(
+                        title: Text(value['text']?.toString() ?? ''),
+                        dense: true,
+                      );
+                    },
+                  );
+                },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: ElevatedButton(
-                onPressed: _callHello,
-                child: const Text('Send to Server'),
-              ),
-            ),
-            ResultDisplay(
-              resultMessage: _resultMessage,
-              errorMessage: _errorMessage,
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textEditingController,
+                    decoration:
+                        const InputDecoration(hintText: 'Type a message…'),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _sendMessage,
+                  child: const Text('Send'),
+                ),
+              ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// ResultDisplays shows the result of the call. Either the returned result
-/// from the `example.greeting` endpoint method or an error message.
-class ResultDisplay extends StatelessWidget {
-  final String? resultMessage;
-  final String? errorMessage;
-
-  const ResultDisplay({super.key, this.resultMessage, this.errorMessage});
-
-  @override
-  Widget build(BuildContext context) {
-    String text;
-    Color backgroundColor;
-    if (errorMessage != null) {
-      backgroundColor = Colors.red[300]!;
-      text = errorMessage!;
-    } else if (resultMessage != null) {
-      backgroundColor = Colors.green[300]!;
-      text = resultMessage!;
-    } else {
-      backgroundColor = Colors.grey[300]!;
-      text = 'No server response yet.';
-    }
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 50),
-      child: Container(
-        color: backgroundColor,
-        child: Center(child: Text(text)),
       ),
     );
   }

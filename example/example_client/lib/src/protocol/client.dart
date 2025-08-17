@@ -11,24 +11,27 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:serverpod_client/serverpod_client.dart' as _i1;
 import 'dart:async' as _i2;
-import 'package:example_client/src/protocol/greeting.dart' as _i3;
-import 'protocol.dart' as _i4;
+import 'protocol.dart' as _i3;
 
-/// This is an example endpoint that returns a greeting message through
-/// its [hello] method.
+/// Streaming endpoint that bridges Serverpod streaming with crdt_sync.
 /// {@category Endpoint}
-class EndpointGreeting extends _i1.EndpointRef {
-  EndpointGreeting(_i1.EndpointCaller caller) : super(caller);
+class EndpointSync extends _i1.EndpointRef {
+  EndpointSync(_i1.EndpointCaller caller) : super(caller);
 
   @override
-  String get name => 'greeting';
+  String get name => 'sync';
 
-  /// Returns a personalized greeting message: "Hello {name}".
-  _i2.Future<_i3.Greeting> hello(String name) =>
-      caller.callServerEndpoint<_i3.Greeting>(
-        'greeting',
-        'hello',
-        {'name': name},
+  /// A streaming method exposed by Serverpod that we use to transport the
+  /// CRDT sync frames as plain UTF-8 JSON strings.
+  ///
+  /// The server returns the outgoing stream to the client, while receiving
+  /// client frames on [fromClient].
+  _i2.Stream<String> crdtStream(_i2.Stream<String> fromClient) =>
+      caller.callStreamingServerEndpoint<_i2.Stream<String>, String>(
+        'sync',
+        'crdtStream',
+        {},
+        {'fromClient': fromClient},
       );
 }
 
@@ -48,7 +51,7 @@ class Client extends _i1.ServerpodClientShared {
     bool? disconnectStreamsOnLostInternetConnection,
   }) : super(
           host,
-          _i4.Protocol(),
+          _i3.Protocol(),
           securityContext: securityContext,
           authenticationKeyManager: authenticationKeyManager,
           streamingConnectionTimeout: streamingConnectionTimeout,
@@ -58,13 +61,13 @@ class Client extends _i1.ServerpodClientShared {
           disconnectStreamsOnLostInternetConnection:
               disconnectStreamsOnLostInternetConnection,
         ) {
-    greeting = EndpointGreeting(this);
+    sync = EndpointSync(this);
   }
 
-  late final EndpointGreeting greeting;
+  late final EndpointSync sync;
 
   @override
-  Map<String, _i1.EndpointRef> get endpointRefLookup => {'greeting': greeting};
+  Map<String, _i1.EndpointRef> get endpointRefLookup => {'sync': sync};
 
   @override
   Map<String, _i1.ModuleEndpointCaller> get moduleLookup => {};

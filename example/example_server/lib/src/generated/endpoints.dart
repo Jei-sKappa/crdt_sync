@@ -10,39 +10,41 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'package:serverpod/serverpod.dart' as _i1;
-import '../greeting_endpoint.dart' as _i2;
+import '../sync_endpoint.dart' as _i2;
 
 class Endpoints extends _i1.EndpointDispatch {
   @override
   void initializeEndpoints(_i1.Server server) {
     var endpoints = <String, _i1.Endpoint>{
-      'greeting': _i2.GreetingEndpoint()
+      'sync': _i2.SyncEndpoint()
         ..initialize(
           server,
-          'greeting',
+          'sync',
           null,
         )
     };
-    connectors['greeting'] = _i1.EndpointConnector(
-      name: 'greeting',
-      endpoint: endpoints['greeting']!,
+    connectors['sync'] = _i1.EndpointConnector(
+      name: 'sync',
+      endpoint: endpoints['sync']!,
       methodConnectors: {
-        'hello': _i1.MethodConnector(
-          name: 'hello',
-          params: {
-            'name': _i1.ParameterDescription(
-              name: 'name',
-              type: _i1.getType<String>(),
+        'crdtStream': _i1.MethodStreamConnector(
+          name: 'crdtStream',
+          params: {},
+          streamParams: {
+            'fromClient': _i1.StreamParameterDescription<String>(
+              name: 'fromClient',
               nullable: false,
             )
           },
+          returnType: _i1.MethodStreamReturnType.streamType,
           call: (
             _i1.Session session,
             Map<String, dynamic> params,
-          ) async =>
-              (endpoints['greeting'] as _i2.GreetingEndpoint).hello(
+            Map<String, Stream> streamParams,
+          ) =>
+              (endpoints['sync'] as _i2.SyncEndpoint).crdtStream(
             session,
-            params['name'],
+            streamParams['fromClient']!.cast<String>(),
           ),
         )
       },

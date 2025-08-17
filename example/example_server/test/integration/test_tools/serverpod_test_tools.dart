@@ -14,7 +14,6 @@
 import 'package:serverpod_test/serverpod_test.dart' as _i1;
 import 'package:serverpod/serverpod.dart' as _i2;
 import 'dart:async' as _i3;
-import 'package:example_server/src/generated/greeting.dart' as _i4;
 import 'package:example_server/src/generated/protocol.dart';
 import 'package:example_server/src/generated/endpoints.dart';
 export 'package:serverpod_test/serverpod_test_public_exports.dart';
@@ -78,7 +77,7 @@ void withServerpod(
 }
 
 class TestEndpoints {
-  late final _GreetingEndpoint greeting;
+  late final _SyncEndpoint sync;
 }
 
 class _InternalTestEndpoints extends TestEndpoints
@@ -88,15 +87,15 @@ class _InternalTestEndpoints extends TestEndpoints
     _i2.SerializationManager serializationManager,
     _i2.EndpointDispatch endpoints,
   ) {
-    greeting = _GreetingEndpoint(
+    sync = _SyncEndpoint(
       endpoints,
       serializationManager,
     );
   }
 }
 
-class _GreetingEndpoint {
-  _GreetingEndpoint(
+class _SyncEndpoint {
+  _SyncEndpoint(
     this._endpointDispatch,
     this._serializationManager,
   );
@@ -105,32 +104,35 @@ class _GreetingEndpoint {
 
   final _i2.SerializationManager _serializationManager;
 
-  _i3.Future<_i4.Greeting> hello(
+  _i3.Stream<String> crdtStream(
     _i1.TestSessionBuilder sessionBuilder,
-    String name,
-  ) async {
-    return _i1.callAwaitableFunctionAndHandleExceptions(() async {
-      var _localUniqueSession =
-          (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
-        endpoint: 'greeting',
-        method: 'hello',
-      );
-      try {
-        var _localCallContext = await _endpointDispatch.getMethodCallContext(
+    _i3.Stream<String> fromClient,
+  ) {
+    var _localTestStreamManager = _i1.TestStreamManager<String>();
+    _i1.callStreamFunctionAndHandleExceptions(
+      () async {
+        var _localUniqueSession =
+            (sessionBuilder as _i1.InternalTestSessionBuilder).internalBuild(
+          endpoint: 'sync',
+          method: 'crdtStream',
+        );
+        var _localCallContext =
+            await _endpointDispatch.getMethodStreamCallContext(
           createSessionCallback: (_) => _localUniqueSession,
-          endpointPath: 'greeting',
-          methodName: 'hello',
-          parameters: _i1.testObjectToJson({'name': name}),
+          endpointPath: 'sync',
+          methodName: 'crdtStream',
+          arguments: {},
+          requestedInputStreams: ['fromClient'],
           serializationManager: _serializationManager,
         );
-        var _localReturnValue = await (_localCallContext.method.call(
+        await _localTestStreamManager.callStreamMethod(
+          _localCallContext,
           _localUniqueSession,
-          _localCallContext.arguments,
-        ) as _i3.Future<_i4.Greeting>);
-        return _localReturnValue;
-      } finally {
-        await _localUniqueSession.close();
-      }
-    });
+          {'fromClient': fromClient},
+        );
+      },
+      _localTestStreamManager.outputStreamController,
+    );
+    return _localTestStreamManager.outputStreamController.stream;
   }
 }
