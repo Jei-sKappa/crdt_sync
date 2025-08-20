@@ -59,8 +59,21 @@ class SyncProtocol {
         }
       },
       cancelOnError: true,
-      onError: (e) => _log('$e'),
-      onDone: close,
+      onError: (e) {
+        if (!_handshakeCompleter.isCompleted) {
+          _handshakeCompleter.completeError(e);
+        }
+        _log('$e');
+        // Ensure we fully close on error to propagate disconnects
+        unawaited(close(4000, '$e'));
+      },
+      onDone: () {
+        if (!_handshakeCompleter.isCompleted) {
+          _handshakeCompleter
+              .completeError(StateError('Channel closed before handshake'));
+        }
+        unawaited(close());
+      },
     );
   }
 

@@ -24,6 +24,7 @@ class CrdtSyncClient {
   final void Function()? onConnecting;
   final OnConnect? onConnect;
   final OnDisconnect? onDisconnect;
+  final OnCommunicationError? onCommunicationError;
   final OnChangeset? onChangesetReceived;
   final OnChangeset? onChangesetSent;
   final bool verbose;
@@ -67,6 +68,7 @@ class CrdtSyncClient {
     this.onConnecting,
     this.onConnect,
     this.onDisconnect,
+    this.onCommunicationError,
     this.onChangesetReceived,
     this.onChangesetSent,
     this.verbose = false,
@@ -88,6 +90,7 @@ class CrdtSyncClient {
     void Function()? onConnecting,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
+    OnCommunicationError? onCommunicationError,
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
@@ -109,6 +112,7 @@ class CrdtSyncClient {
       onConnecting: onConnecting,
       onConnect: onConnect,
       onDisconnect: onDisconnect,
+      onCommunicationError: onCommunicationError,
       onChangesetReceived: onChangesetReceived,
       onChangesetSent: onChangesetSent,
       verbose: verbose,
@@ -147,6 +151,12 @@ class CrdtSyncClient {
         onDisconnect: (remoteNodeId, code, reason) {
           _setState(ConnectionState.disconnected);
           onDisconnect?.call(remoteNodeId, code, reason);
+          _crdtSync = null;
+          _maybeReconnect();
+        },
+        onCommunicationError: (error, st) {
+          _setState(ConnectionState.disconnected);
+          onCommunicationError?.call(error, st);
           _crdtSync = null;
           _maybeReconnect();
         },

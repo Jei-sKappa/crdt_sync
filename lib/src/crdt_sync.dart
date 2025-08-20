@@ -21,6 +21,7 @@ typedef OnChangeset = void Function(
     String nodeId, Map<String, int> recordCounts);
 typedef OnConnect = void Function(String peerId, Object? customData);
 typedef OnDisconnect = void Function(String peerId, int? code, String? reason);
+typedef OnCommunicationError = void Function(Object error, StackTrace st);
 
 class CrdtSync {
   final bool isClient;
@@ -35,6 +36,7 @@ class CrdtSync {
   final OnDisconnect? onDisconnect;
   final OnChangeset? onChangesetReceived;
   final OnChangeset? onChangesetSent;
+  final OnCommunicationError? onCommunicationError;
   final bool verbose;
 
   late final SyncProtocol _syncProtocol;
@@ -79,6 +81,7 @@ class CrdtSync {
     ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
+    OnCommunicationError? onCommunicationError,
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
@@ -92,6 +95,7 @@ class CrdtSync {
           mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
+          onCommunicationError: onCommunicationError,
           onChangesetReceived: onChangesetReceived,
           onChangesetSent: onChangesetSent,
           verbose: verbose,
@@ -113,6 +117,7 @@ class CrdtSync {
     ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
+    OnCommunicationError? onCommunicationError,
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
@@ -126,6 +131,7 @@ class CrdtSync {
           mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
+          onCommunicationError: onCommunicationError,
           onChangesetReceived: onChangesetReceived,
           onChangesetSent: onChangesetSent,
           verbose: verbose,
@@ -143,6 +149,7 @@ class CrdtSync {
     ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
+    OnCommunicationError? onCommunicationError,
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
@@ -156,6 +163,7 @@ class CrdtSync {
           mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
+          onCommunicationError: onCommunicationError,
           onChangesetReceived: onChangesetReceived,
           onChangesetSent: onChangesetSent,
           verbose: verbose,
@@ -184,6 +192,7 @@ class CrdtSync {
     ChangesetMapper? mapIncomingChangeset,
     OnConnect? onConnect,
     OnDisconnect? onDisconnect,
+    OnCommunicationError? onCommunicationError,
     OnChangeset? onChangesetReceived,
     OnChangeset? onChangesetSent,
     bool verbose = false,
@@ -197,6 +206,7 @@ class CrdtSync {
           mapIncomingChangeset: mapIncomingChangeset,
           onConnect: onConnect,
           onDisconnect: onDisconnect,
+          onCommunicationError: onCommunicationError,
           onChangesetReceived: onChangesetReceived,
           onChangesetSent: onChangesetSent,
           verbose: verbose,
@@ -213,6 +223,7 @@ class CrdtSync {
     required this.mapIncomingChangeset,
     required this.onConnect,
     required this.onDisconnect,
+    required this.onCommunicationError,
     required this.onChangesetReceived,
     required this.onChangesetSent,
     required this.verbose,
@@ -255,13 +266,14 @@ class CrdtSync {
       // Send changeset since last sync.
       // This is done after monitoring to prevent losing changes that happen
       // exactly between both calls.
-      final changeset = await (changesetBuilder(
+      final changeset = await changesetBuilder(
         onlyNodeId: isClient ? crdt.nodeId : null,
         exceptNodeId: isClient ? null : _peerId,
         modifiedAfter: handshake.lastModified,
-      ));
+      );
       _sendChangeset(changeset);
     } catch (e, st) {
+      onCommunicationError?.call(e, st);
       await localSubscription?.cancel();
       await _syncProtocol.close();
       _logException(e, st);
