@@ -1,10 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:example_client/example_client.dart';
 import 'package:flutter/material.dart';
 import 'package:serverpod_flutter/serverpod_flutter.dart';
-import 'package:crdt/map_crdt.dart';
 import 'package:crdt_sync/crdt_sync.dart';
+import 'package:sqlite_crdt/sqlite_crdt.dart';
 
 /// Sets up a global client object that can be used to talk to the server from
 /// anywhere in our app. The client is generated from your server code
@@ -17,18 +18,10 @@ late final Client client;
 
 late String serverUrl;
 
-// Global CRDT for demo, with a single 'chat' table
-final mapCrdt = MapCrdt(['chat']);
-
 // Sync client that reconnects automatically using Serverpod streaming method
 CrdtSyncClient? syncClient;
 
-void main() {
-  // When you are running the app on a physical device, you need to set the
-  // server URL to the IP address of your computer. You can find the IP
-  // address by running `ipconfig` on Windows or `ifconfig` on Mac/Linux.
-  // You can set the variable when running or building your app like this:
-  // E.g. `flutter run --dart-define=SERVER_URL=https://api.example.com/`
+Future<void> main() async {
   const serverUrlFromEnv = String.fromEnvironment('SERVER_URL');
   final serverUrl =
       serverUrlFromEnv.isEmpty ? 'http://$localhost:8080/' : serverUrlFromEnv;
@@ -36,41 +29,66 @@ void main() {
   client = Client(serverUrl)
     ..connectivityMonitor = FlutterConnectivityMonitor();
 
+  final crdt = await SqliteCrdt.openInMemory();
+  await crdt.init(Platform.isMacOS ? 'alice-macos' : 'bob-ios');
+  await crdt.execute('''
+    CREATE TABLE IF NOT EXISTS chat (
+      id TEXT NOT NULL PRIMARY KEY,
+      message TEXT NOT NULL
+    )
+  ''');
+
   // Build a duplex channel from the Serverpod streaming endpoint
   syncClient = CrdtSyncClient(
-    mapCrdt,
+    crdt,
     () async {
-      // Create duplex streams
-      final toServer = StreamController<String>();
-      final fromServer = client.sync.crdtStream(toServer.stream);
-      return DuplexStreamChannel(
+      late DuplexStreamChannel channel;
+      final toServer = StreamController<String>(
+        onCancel: () {
+          channel.close();
+        },
+      );
+      final rawFromServer = client.sync.crdtStream(toServer.stream);
+      final fromServer = rawFromServer.asBroadcastStream();
+      // Monitor completion/errors to propagate closure
+      fromServer.listen(
+        (_) {},
+        onDone: () => channel.close(),
+        onError: (_) => channel.close(),
+      );
+      channel = DuplexStreamChannel(
         incoming: fromServer,
         outgoing: toServer.sink,
       );
+      return channel;
     },
     // verbose: true,
   );
 
   syncClient!.connect();
 
-  runApp(const MyApp());
+  runApp(MyApp(crdt: crdt));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.crdt});
+
+  final SqliteCrdt crdt;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Serverpod Demo',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MyHomePage(title: 'Serverpod Example'),
+      home: MyHomePage(title: 'Serverpod Example', crdt: crdt),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({super.key, required this.title, required this.crdt});
+
+  final SqliteCrdt crdt;
 
   final String title;
 
@@ -85,8 +103,13 @@ class MyHomePageState extends State<MyHomePage> {
     final text = _textEditingController.text.trim();
     if (text.isEmpty) return;
     _textEditingController.clear();
-    await mapCrdt.put('chat', DateTime.now().microsecondsSinceEpoch.toString(),
-        {'text': text});
+    await widget.crdt.execute(
+      'INSERT INTO chat (id, message) VALUES (?, ?)',
+      [
+        DateTime.now().microsecondsSinceEpoch.toString(),
+        text,
+      ],
+    );
   }
 
   @override
@@ -99,19 +122,32 @@ class MyHomePageState extends State<MyHomePage> {
           children: [
             Expanded(
               child: StreamBuilder(
-                stream: mapCrdt.onTablesChanged,
-                builder: (context, snapshot) {
-                  final records = List.of(mapCrdt.getChangeset()['chat'] ?? [])
-                    ..sort((a, b) =>
-                        (a['key'] as String).compareTo(b['key'] as String));
-                  return ListView.builder(
-                    itemCount: records.length,
-                    itemBuilder: (context, index) {
-                      final rec = records[index];
-                      final value = rec['value'] as Map? ?? {};
-                      return ListTile(
-                        title: Text(value['text']?.toString() ?? ''),
-                        dense: true,
+                stream: widget.crdt.onTablesChanged,
+                builder: (context, _) {
+                  return FutureBuilder(
+                    future: widget.crdt.getChangeset(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}'));
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final records = List.of(
+                          snapshot.data!['chat'] ?? <Map<String, Object?>>[])
+                        ..sort((a, b) =>
+                            (a['id'] as String).compareTo(b['id'] as String));
+                      return ListView.builder(
+                        itemCount: records.length,
+                        itemBuilder: (context, index) {
+                          final rec = records[index];
+                          final value = rec['message'] as String? ?? '';
+                          return ListTile(
+                            title: Text(value),
+                            dense: true,
+                          );
+                        },
                       );
                     },
                   );

@@ -11,6 +11,13 @@ dependencies:
   crdt_sync:
     path: ../../
   crdt: ^5.1.3
+  # sqlite_crdt: ^3.0.3
+  sqlite_crdt:
+    path: ../../../../opensource/sqlite_crdt
+
+dependency_overrides:
+  sql_crdt:
+    path: ../../../../opensource/sql_crdt
 
 dev_dependencies:
   lints: '>=3.0.0 <7.0.0'

@@ -6,14 +6,15 @@ import 'src/generated/endpoints.dart';
 
 /// The starting point of the Serverpod server.
 void run(List<String> args) async {
-  mapCrdt.onTablesChanged.listen(
-    (event) {
+  final crdt = await createCrdt();
+  crdt.onTablesChanged.listen(
+    (event) async {
       print('SERVER:');
-      final all = mapCrdt.getChangeset();
+      final all = await crdt.getChangeset();
       for (final entry in all.entries) {
         print('  ${entry.key}:');
         for (final record in entry.value) {
-          print('    ${record['key']}: ${record['value']}');
+          print('    ${record['id']}: ${record['message']}');
         }
       }
     },

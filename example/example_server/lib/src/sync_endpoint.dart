@@ -21,9 +21,11 @@ class SyncEndpoint extends Endpoint {
       outgoing: toClient.sink,
     );
 
+    final crdt = await createCrdt();
+
     // Start sync over the duplex channel
     CrdtSync.server(
-      mapCrdt,
+      crdt,
       channel,
       handshakeDataBuilder: (peerId, peerData) => {
         'server': 'example_server',
