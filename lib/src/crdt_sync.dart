@@ -41,6 +41,9 @@ class CrdtSync {
 
   late final SyncProtocol _syncProtocol;
   String? _peerId;
+  // Per-connection watermark for outgoing deltas.
+  // Always uses local node id semantics (as ensured by handshake parsing).
+  late Hlc _lastSentModified;
 
   /// Represents the nodeId from the remote peer connected to this socket.
   String? get peerId => _peerId;
@@ -250,6 +253,10 @@ class CrdtSync {
     try {
       final handshake = await _performHandshake();
       _peerId = handshake.nodeId;
+      
+      // Initialize per-connection watermark from the peer handshake.
+      _lastSentModified = handshake.lastModified;
+
       onConnect?.call(_peerId!, handshake.data);
 
       // Monitor for changes and send them immediately
@@ -259,7 +266,7 @@ class CrdtSync {
                 onlyTables: e.tables,
                 onlyNodeId: isClient ? crdt.nodeId : null,
                 exceptNodeId: isClient ? null : _peerId,
-                modifiedOn: e.hlc,
+                modifiedAfter: _lastSentModified,
               ))
           .listen(_sendChangeset);
 
@@ -315,6 +322,12 @@ class CrdtSync {
     _syncProtocol.sendChangeset(changeset);
     onChangesetSent?.call(
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
+
+    // Update per-connection watermark to the max 'modified' we just sent.
+    final maxSent = _maxModifiedInChangeset(changeset);
+    if (maxSent != null && maxSent.compareTo(_lastSentModified) > 0) {
+      _lastSentModified = maxSent;
+    }
   }
 
   Future<void> _mergeChangeset(CrdtChangeset changeset) async {
@@ -369,6 +382,21 @@ class CrdtSync {
     } catch (e, st) {
       _logException(e, st);
     }
+  }
+
+  Hlc? _maxModifiedInChangeset(CrdtChangeset changeset) {
+    Hlc? max;
+    for (final table in changeset.values) {
+      for (final record in table) {
+        final raw = record['modified'];
+        if (raw == null) continue;
+        final hlc = raw is Hlc ? raw : Hlc.parse(raw as String);
+        if (max == null || hlc.compareTo(max) > 0) {
+          max = hlc;
+        }
+      }
+    }
+    return max;
   }
 
   void _logException(Object error, StackTrace st) {
