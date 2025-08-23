@@ -7,12 +7,13 @@ Future<SqliteCrdt> createCrdt() async {
   if (_crdt != null) return _crdt!;
 
   final crdt = await SqliteCrdt.openInMemory();
-  await crdt.init("server_node_id");
-  // Create a table for the chat messages
+  await crdt.init("server");
+  // Create a table for the todos
   await crdt.execute('''
-    CREATE TABLE IF NOT EXISTS chat (
+    CREATE TABLE IF NOT EXISTS todos (
       id TEXT NOT NULL PRIMARY KEY,
-      message TEXT NOT NULL
+      title TEXT NOT NULL,
+      done BOOLEAN NOT NULL DEFAULT FALSE
     )
   ''');
   _crdt = crdt;

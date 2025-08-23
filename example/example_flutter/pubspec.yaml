@@ -8,7 +8,8 @@ environment:
   flutter: '>=3.24.0'
 
 dependencies:
-  crdt_sync: ^1.0.10
+  crdt_sync:
+    path: ../../
   drift: ^2.28.1
   drift_crdt:
     path: ../../../../explore/flutter/crdt_cachapa/drift_crdt
