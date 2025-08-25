@@ -1,4 +1,4 @@
-import 'package:example_flutter/ui/todo/todo.dart';
+import 'package:example_flutter/ui/auth/auth.dart';
 import 'package:flutter/material.dart';
 
 class AppSplashScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class _AppSplashScreenState extends State<AppSplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const nextScreen = TodoScreen();
+    const nextScreen = AuthGateScreen();
 
     if (!_isInitialized) {
       return FutureBuilder(

@@ -1,5 +1,5 @@
-import 'package:example_flutter/ui/todo/components/components.dart';
-import 'package:example_flutter/ui/todo/widgets/widgets.dart';
+import 'package:example_flutter/ui/auth/auth.dart';
+import 'package:example_flutter/ui/todo/todo.dart';
 import 'package:flutter/material.dart';
 
 class TodoScreen extends StatelessWidget {
@@ -7,7 +7,13 @@ class TodoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
+      appBar: AppBar(
+        title: const UserLabelComponent(),
+        actions: [
+          LogOutButton(),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

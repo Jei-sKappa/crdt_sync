@@ -1,62 +1,40 @@
 import 'dart:async';
 
-import 'package:crdt_sync/crdt_sync.dart';
 import 'package:drift_crdt/drift_crdt.dart';
-import 'package:example_client/example_client.dart';
 import 'package:example_flutter/bootstrap.dart';
 import 'package:example_flutter/data/data.dart';
 import 'package:example_flutter/stub/database/database.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:serverpod_flutter/serverpod_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  const author = kIsWeb ? 'alice-web' : 'bob-native';
+  // Configure Supabase via dart-define
+  const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+  const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseAnonKey,
+  );
 
   // Initialize the SQLite database
   final sqliteDatabase = AppDatabase(await createInMemoryQueryExecutor());
 
   // Initialize the CRDT
   final crdt = DriftCrdt(sqliteDatabase);
-  await crdt.init(author);
+  await crdt.init();
 
-  // Initialize the sync client
-  final client = Client('http://$localhost:8080/')
-    ..connectivityMonitor = FlutterConnectivityMonitor();
-
-  final syncClient = CrdtSyncClient(
-    crdt,
-    () async {
-      late DuplexStreamChannel channel;
-      final toServer = StreamController<String>(
-        onCancel: () {
-          channel.close();
-        },
-      );
-      final rawFromServer = client.sync.crdtStream(toServer.stream);
-      final fromServer = rawFromServer.asBroadcastStream();
-      // Monitor completion/errors to propagate closure
-      fromServer.listen(
-        (_) {},
-        onDone: () => channel.close(),
-        onError: (_) => channel.close(),
-      );
-      channel = DuplexStreamChannel(
-        incoming: fromServer,
-        outgoing: toServer.sink,
-      );
-      return channel;
-    },
-    verbose: true,
-  );
-
-  syncClient.connect();
-
-  // Initialize the todo repository
+  // Initialize the repositories
   // final todoRepository = SqliteCrdtTodoRepository(crdt);
   final todoRepository = UnsafeSqliteCrdtTodoRepository(crdt);
+  final authRepository =
+      SupabaseAuthRepository(client: Supabase.instance.client);
 
-  bootstrap(todoRepository);
+  bootstrap(
+    crdt: crdt,
+    authRepository: authRepository,
+    todoRepository: todoRepository,
+  );
 }
