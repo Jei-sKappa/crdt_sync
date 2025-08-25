@@ -30,7 +30,7 @@ class SyncEndpoint extends Endpoint {
       outgoing: toClient.sink,
     );
 
-    final crdt = await createCrdt();
+    final crdt = await getCrdtFor(userIdentifier);
 
     // Start sync over the duplex channel
     CrdtSync.server(
