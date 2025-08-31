@@ -58,7 +58,6 @@ void main() {
         copy['value'] = value;
         return copy;
       },
-      verbose: true,
     );
 
     CrdtSync.client(
@@ -68,7 +67,6 @@ void main() {
         connectionCount++;
         if (connectionCount == 2) handshakeComplete.complete();
       },
-      verbose: true,
     );
 
     // Wait for proper handshake completion

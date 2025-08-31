@@ -35,7 +35,6 @@ void main() {
       pair.a,
       handshakeDataBuilder: (peerId, peerData) => {'from': 'server'},
       onConnect: (peerId, data) => serverConnected.complete((peerId, data)),
-      verbose: true,
     );
 
     // Start client
@@ -44,7 +43,6 @@ void main() {
       pair.b,
       handshakeDataBuilder: () => {'from': 'client'},
       onConnect: (peerId, data) => clientConnected.complete((peerId, data)),
-      verbose: true,
     );
 
     // Wait for handshake completion
