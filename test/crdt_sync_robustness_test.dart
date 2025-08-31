@@ -72,14 +72,14 @@ void main() {
         },
         validateRecord: (table, record) {
           validatorCalled++;
-          if ((record['key'] as String).startsWith('bad_valid')) {
+          if ((record['key']! as String).startsWith('bad_valid')) {
             throw StateError('validator boom');
           }
           return true;
         },
         mapIncomingChangeset: (table, record) {
           mapperCalled++;
-          if ((record['key'] as String).startsWith('bad_map')) {
+          if ((record['key']! as String).startsWith('bad_map')) {
             throw StateError('mapper boom');
           }
           return record;
@@ -159,7 +159,7 @@ void main() {
 
       expect(serverData1, isNull);
       // Server sends null by default unless configured, so allow null or map
-      expect(clientData1, anyOf(isNull, isA<Map>()));
+      expect(clientData1, isNull);
 
       // Case 2: large metadata from client
       final pair3 = _LoopbackPair();
@@ -189,9 +189,10 @@ void main() {
       final clientData2 =
           await clientLarge.future.timeout(const Duration(seconds: 2));
 
-      expect(serverData2, isA<Map>());
-      expect((serverData2 as Map)['s'], (large['s'] as String));
-      expect(clientData2, anyOf(isNull, isA<Map>()));
+      expect(serverData2, isA<Map<String, dynamic>>());
+      expect(
+          (serverData2! as Map<String, dynamic>)['s'], large['s']! as String);
+      expect(clientData2, isNull);
     });
 
     test('mismatched tables are ignored safely', () async {
@@ -222,7 +223,8 @@ void main() {
 
       await connected.future.timeout(const Duration(seconds: 2));
 
-      // Client writes to a table that server doesn't manage; should NOT break sync
+      // Client writes to a table that server doesn't manage; should NOT break
+      // sync
       await client.put('unknown_table', 'u1', {'x': 1});
 
       // Also write to a shared table to verify sync continues normally

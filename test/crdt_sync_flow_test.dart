@@ -39,8 +39,8 @@ void main() {
         if (connectionCount == 2) handshakeComplete.complete();
       },
       validateRecord: (table, record) async {
-        final key = record['key'] as String;
-        final blocked = (record['value'] as Map)['blocked'] == true;
+        final key = record['key']! as String;
+        final blocked = (record['value']! as Map)['blocked'] == true;
         final isValid = !blocked;
         validationResults[key] = isValid;
 
@@ -52,7 +52,7 @@ void main() {
         return isValid;
       },
       mapIncomingChangeset: (table, record) {
-        final value = Map<String, dynamic>.from(record['value'] as Map);
+        final value = Map<String, dynamic>.from(record['value']! as Map);
         value['touched'] = true;
         final copy = Map<String, dynamic>.from(record);
         copy['value'] = value;
@@ -72,17 +72,17 @@ void main() {
     );
 
     // Wait for proper handshake completion
-    await handshakeComplete.future.timeout(Duration(seconds: 2));
+    await handshakeComplete.future.timeout(const Duration(seconds: 2));
 
     // Client writes two records: one accepted and one rejected
     await client.put('t', 'ok', {'blocked': false, 'value': 1});
     await client.put('t', 'bad', {'blocked': true, 'value': 2});
 
     // Wait for validation to complete
-    await validationComplete.future.timeout(Duration(seconds: 2));
+    await validationComplete.future.timeout(const Duration(seconds: 2));
 
     // Wait a bit more for processing to complete
-    await Future.delayed(Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
     // Verify validation results
     expect(validationResults['ok'], true);
@@ -97,8 +97,8 @@ void main() {
     expect(rejected.length, 0);
 
     final acceptedRecord = accepted.first;
-    expect((acceptedRecord['value'] as Map)['touched'], true);
-    expect((acceptedRecord['value'] as Map)['value'], 1);
+    expect((acceptedRecord['value']! as Map)['touched'], true);
+    expect((acceptedRecord['value']! as Map)['value'], 1);
   });
 
   test('CrdtSync.close triggers onDisconnect with DuplexStreamChannel',
@@ -128,9 +128,9 @@ void main() {
     );
 
     // Wait for connection to be established before closing
-    await connected.future.timeout(Duration(seconds: 2));
+    await connected.future.timeout(const Duration(seconds: 2));
     await serverSync.close();
-    await disconnected.future.timeout(Duration(seconds: 2));
+    await disconnected.future.timeout(const Duration(seconds: 2));
   });
 
   test('WebSocket integration: upgrade server and CrdtSyncClient connects',
@@ -180,10 +180,12 @@ void main() {
     final stateSubscription = client.watchState.listen(stateChanges.add);
 
     try {
-      client.connect();
+      // Explicitly not awaiting to test the reconnect logic
+      unawaited(client.connect());
+
       await Future.wait([
-        connected.future.timeout(Duration(seconds: 5)),
-        serverConnected.future.timeout(Duration(seconds: 5)),
+        connected.future.timeout(const Duration(seconds: 5)),
+        serverConnected.future.timeout(const Duration(seconds: 5)),
       ]);
 
       // Verify connection state
@@ -191,7 +193,7 @@ void main() {
 
       // Disconnect explicitly
       await client.disconnect(4000, 'bye');
-      await disconnected.future.timeout(Duration(seconds: 5));
+      await disconnected.future.timeout(const Duration(seconds: 5));
 
       // Verify final state
       expect(client.state, ConnectionState.disconnected);
@@ -228,7 +230,7 @@ void main() {
         }
       },
       validateRecord: (table, record) async {
-        final key = record['key'] as String;
+        final key = record['key']! as String;
         recordsValidated++;
 
         if (key == 'error') {
@@ -259,17 +261,17 @@ void main() {
       },
     );
 
-    await handshakeComplete.future.timeout(Duration(seconds: 2));
+    await handshakeComplete.future.timeout(const Duration(seconds: 2));
 
     // Send a record that will be rejected and one that will be accepted
     await client.put('t', 'error', {'data': 'should fail'});
     await client.put('t', 'ok', {'data': 'should pass'});
 
     // Wait for validation to complete
-    await validationComplete.future.timeout(Duration(seconds: 2));
+    await validationComplete.future.timeout(const Duration(seconds: 2));
 
     // Wait a bit more for processing to complete
-    await Future.delayed(Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
 
     // Verify validation results
     expect(validationResults['error'], false);
@@ -322,7 +324,7 @@ void main() {
       },
     );
 
-    await connected.future.timeout(Duration(seconds: 2));
+    await connected.future.timeout(const Duration(seconds: 2));
 
     // Monitor client for data
     final subscription = client.onTablesChanged.listen((event) {
@@ -336,7 +338,7 @@ void main() {
         .put('public', 'pub1', {'type': 'public', 'data': 'everyone can see'});
     await server.put('private', 'priv1', {'type': 'private', 'data': 'secret'});
 
-    await dataReceived.future.timeout(Duration(seconds: 2));
+    await dataReceived.future.timeout(const Duration(seconds: 2));
     await subscription.cancel();
 
     // Verify client only received public data

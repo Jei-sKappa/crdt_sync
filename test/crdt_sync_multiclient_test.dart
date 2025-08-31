@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:crdt/crdt.dart';
 import 'package:crdt/map_crdt.dart';
 import 'package:crdt_sync/crdt_sync.dart';
 import 'package:test/test.dart';
@@ -194,7 +195,7 @@ void main() {
         }
       }
 
-      final subs = <StreamSubscription>[
+      final subs = <StreamSubscription<({Hlc hlc, Iterable<String> tables})>>[
         server.onTablesChanged.listen((_) => check()),
         clientA.onTablesChanged.listen((_) => check()),
         clientB.onTablesChanged.listen((_) => check()),
@@ -425,7 +426,7 @@ void main() {
       final rows = client.getChangeset()['seed'] ?? [];
       expect(rows.length, 1);
       expect(rows.first['key'], 's1');
-      expect((rows.first['value'] as Map)['x'], 1);
+      expect((rows.first['value']! as Map)['x'], 1);
     });
 
     test('no echo back to origin (server excludes origin node)', () async {

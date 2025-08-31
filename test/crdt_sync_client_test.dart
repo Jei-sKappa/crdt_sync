@@ -63,8 +63,9 @@ void main() {
         maxReconnectDelay: 4,
       );
 
-      syncClient.connect();
-      await connected.future.timeout(Duration(seconds: 8));
+      // Explicitly not awaiting to test the reconnect logic
+      unawaited(syncClient.connect());
+      await connected.future.timeout(const Duration(seconds: 8));
 
       // Verify exponential backoff occurred
       expect(connectionAttempts, 3);
@@ -131,15 +132,16 @@ void main() {
         maxReconnectDelay: 4,
       );
 
-      syncClient.connect();
-      await connected.future.timeout(Duration(seconds: 5));
+      // Explicitly not awaiting to test the reconnect logic
+      unawaited(syncClient.connect());
+      await connected.future.timeout(const Duration(seconds: 5));
 
       // Force disconnect the first connection
       await firstConnection.sink.close();
-      await disconnected.future.timeout(Duration(seconds: 5));
+      await disconnected.future.timeout(const Duration(seconds: 5));
 
       // Wait for automatic reconnection
-      await reconnected.future.timeout(Duration(seconds: 10));
+      await reconnected.future.timeout(const Duration(seconds: 10));
 
       expect(serverConnections, 2);
       expect(connectCount, 2);
@@ -168,10 +170,11 @@ void main() {
         maxReconnectDelay: 1,
       );
 
-      syncClient.connect();
+      // Explicitly not awaiting to test the reconnect logic
+      unawaited(syncClient.connect());
 
       // Let it try to connect for a bit
-      await Future.delayed(Duration(milliseconds: 1500));
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
 
       // Manually disconnect
       await syncClient.disconnect();
@@ -179,7 +182,7 @@ void main() {
       final attemptsBeforeDisconnect = connectionAttempts;
 
       // Wait a bit more and verify no more connection attempts
-      await Future.delayed(Duration(milliseconds: 1500));
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
 
       expect(connectionAttempts, attemptsBeforeDisconnect);
       expect(syncClient.state, ConnectionState.disconnected);
@@ -213,13 +216,14 @@ void main() {
       try {
         expect(syncClient.state, ConnectionState.disconnected);
 
-        syncClient.connect();
-        await connected.future.timeout(Duration(seconds: 5));
+        // Explicitly not awaiting to test the reconnect logic
+        unawaited(syncClient.connect());
+        await connected.future.timeout(const Duration(seconds: 5));
 
         expect(syncClient.state, ConnectionState.connected);
 
         await syncClient.disconnect();
-        await disconnected.future.timeout(Duration(seconds: 5));
+        await disconnected.future.timeout(const Duration(seconds: 5));
 
         expect(syncClient.state, ConnectionState.disconnected);
 
@@ -279,15 +283,16 @@ void main() {
         maxReconnectDelay: 4,
       );
 
-      syncClient.connect();
-      await connected.future.timeout(Duration(seconds: 5));
+      // Explicitly not awaiting to test the reconnect logic
+      unawaited(syncClient.connect());
+      await connected.future.timeout(const Duration(seconds: 5));
 
       // Add data while connected
       await client.put('test', 'offline_data', {'created': 'while_connected'});
 
       // Force disconnect
       await firstConnection.sink.close();
-      await disconnected.future.timeout(Duration(seconds: 5));
+      await disconnected.future.timeout(const Duration(seconds: 5));
 
       // Add data while disconnected
       await client
@@ -304,10 +309,10 @@ void main() {
       });
 
       // Wait for automatic reconnection
-      await reconnected.future.timeout(Duration(seconds: 10));
+      await reconnected.future.timeout(const Duration(seconds: 10));
 
       // Wait for offline data to sync
-      await dataReplicated.future.timeout(Duration(seconds: 5));
+      await dataReplicated.future.timeout(const Duration(seconds: 5));
       await subscription.cancel();
 
       // Verify all data reached server
@@ -338,10 +343,11 @@ void main() {
       final subscription = syncClient.watchState.listen(stateChanges.add);
 
       try {
-        syncClient.connect();
+        // Explicitly not awaiting to test the reconnect logic
+        unawaited(syncClient.connect());
 
         // Wait for multiple failed connection attempts
-        await Future.delayed(Duration(milliseconds: 1500));
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
 
         await syncClient.disconnect();
 

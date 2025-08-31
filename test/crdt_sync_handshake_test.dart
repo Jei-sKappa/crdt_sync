@@ -49,9 +49,9 @@ void main() {
 
     // Wait for handshake completion
     final (serverPeer, serverData) =
-        await serverConnected.future.timeout(Duration(seconds: 2));
+        await serverConnected.future.timeout(const Duration(seconds: 2));
     final (clientPeer, clientData) =
-        await clientConnected.future.timeout(Duration(seconds: 2));
+        await clientConnected.future.timeout(const Duration(seconds: 2));
 
     expect(serverPeer, clientCrdt.nodeId);
     expect(clientPeer, serverCrdt.nodeId);
@@ -63,7 +63,7 @@ void main() {
       if (event.tables.contains('t')) {
         final rows = clientCrdt.getChangeset()['t'] ?? [];
         final hasK1 =
-            rows.any((e) => e['key'] == 'k1' && (e['value'] as Map)['v'] == 1);
+            rows.any((e) => e['key'] == 'k1' && (e['value']! as Map)['v'] == 1);
         if (hasK1 && !dataReplicated.isCompleted) {
           dataReplicated.complete();
         }
@@ -74,14 +74,14 @@ void main() {
     await serverCrdt.put('t', 'k1', {'v': 1});
 
     // Wait for replication to complete using event-driven pattern
-    await dataReplicated.future.timeout(Duration(seconds: 2));
+    await dataReplicated.future.timeout(const Duration(seconds: 2));
     await subscription.cancel();
 
     // Verify final state
     final clientRows = clientCrdt.getChangeset()['t'] ?? [];
     expect(clientRows.length, 1);
     expect(clientRows.first['key'], 'k1');
-    expect((clientRows.first['value'] as Map)['v'], 1);
+    expect((clientRows.first['value']! as Map)['v'], 1);
   });
 
   test('handshake with bidirectional data exchange', () async {
@@ -131,7 +131,7 @@ void main() {
       },
     );
 
-    await handshakeComplete.future.timeout(Duration(seconds: 2));
+    await handshakeComplete.future.timeout(const Duration(seconds: 2));
 
     // Monitor both CRDTs for changes
     serverCrdt.onTablesChanged.listen((event) {
@@ -152,7 +152,7 @@ void main() {
     await clientCrdt.put(
         'messages', 'm2', {'text': 'Hello from client', 'sender': 'client'});
 
-    await allDataSynced.future.timeout(Duration(seconds: 3));
+    await allDataSynced.future.timeout(const Duration(seconds: 3));
 
     // Verify both sides have all data
     final serverMessages = serverCrdt.getChangeset()['messages'] ?? [];
@@ -185,7 +185,7 @@ void main() {
         'capabilities': ['sync', 'validate']
       },
       onConnect: (peerId, data) =>
-          serverConnected.complete(data as Map<String, dynamic>),
+          serverConnected.complete(data! as Map<String, dynamic>),
     );
 
     CrdtSync.client(
@@ -194,13 +194,13 @@ void main() {
       handshakeDataBuilder: () =>
           {'client_id': 'test_client', 'version': '1.0.0', 'user': 'alice'},
       onConnect: (peerId, data) =>
-          clientConnected.complete(data as Map<String, dynamic>),
+          clientConnected.complete(data! as Map<String, dynamic>),
     );
 
     final serverData =
-        await serverConnected.future.timeout(Duration(seconds: 2));
+        await serverConnected.future.timeout(const Duration(seconds: 2));
     final clientData =
-        await clientConnected.future.timeout(Duration(seconds: 2));
+        await clientConnected.future.timeout(const Duration(seconds: 2));
 
     // Verify handshake data was exchanged correctly
     expect(serverData['client_id'], 'test_client');

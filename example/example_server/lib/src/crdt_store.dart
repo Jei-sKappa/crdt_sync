@@ -48,6 +48,7 @@ Future<SqliteCrdt> _createCrdt(String tenantId) async {
       }
     }
 
+    // ignore: avoid_print
     print(buff.toString());
   });
 

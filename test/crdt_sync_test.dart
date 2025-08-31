@@ -42,9 +42,9 @@ void main() {
 
       // Wait for proper handshake completion
       final serverPeerId =
-          await serverConnected.future.timeout(Duration(seconds: 2));
+          await serverConnected.future.timeout(const Duration(seconds: 2));
       final clientPeerId =
-          await clientConnected.future.timeout(Duration(seconds: 2));
+          await clientConnected.future.timeout(const Duration(seconds: 2));
 
       expect(serverPeerId, equals(client.nodeId));
       expect(clientPeerId, equals(server.nodeId));
@@ -59,14 +59,14 @@ void main() {
         }
       });
 
-      await dataReady.future.timeout(Duration(seconds: 2));
+      await dataReady.future.timeout(const Duration(seconds: 2));
       await subscription.cancel();
 
       // Verify data reached server
       final serverData = server.getChangeset()['users']!;
       expect(serverData.length, 1);
       expect(serverData.first['key'], 'user1');
-      expect((serverData.first['value'] as Map)['name'], 'Alice');
+      expect((serverData.first['value']! as Map)['name'], 'Alice');
     });
 
     test('server-to-client sync works correctly', () async {
@@ -100,7 +100,7 @@ void main() {
         },
       );
 
-      await handshakeComplete.future.timeout(Duration(seconds: 2));
+      await handshakeComplete.future.timeout(const Duration(seconds: 2));
 
       // Wait for client to receive the data
       final subscription = client.onTablesChanged.listen((event) {
@@ -112,14 +112,14 @@ void main() {
       // Add data to server after connection is established
       await server.put('products', 'prod1', {'name': 'Widget', 'price': 10.99});
 
-      await dataReady.future.timeout(Duration(seconds: 2));
+      await dataReady.future.timeout(const Duration(seconds: 2));
       await subscription.cancel();
 
       // Verify data reached client
       final clientData = client.getChangeset()['products']!;
       expect(clientData.length, 1);
       expect(clientData.first['key'], 'prod1');
-      expect((clientData.first['value'] as Map)['name'], 'Widget');
+      expect((clientData.first['value']! as Map)['name'], 'Widget');
     });
 
     test('multiple table sync works correctly', () async {
@@ -130,7 +130,7 @@ void main() {
       final connected = Completer<void>();
       final allDataReceived = Completer<void>();
       var connectionCount = 0;
-      var tablesReceived = <String>{};
+      final tablesReceived = <String>{};
 
       CrdtSync.server(
         server,
@@ -150,7 +150,7 @@ void main() {
         },
       );
 
-      await connected.future.timeout(Duration(seconds: 2));
+      await connected.future.timeout(const Duration(seconds: 2));
 
       // Monitor for both tables to receive data
       final subscription = server.onTablesChanged.listen((event) {
@@ -164,7 +164,7 @@ void main() {
       await client.put('users', 'u1', {'name': 'Bob'});
       await client.put('posts', 'p1', {'title': 'Hello World', 'author': 'u1'});
 
-      await allDataReceived.future.timeout(Duration(seconds: 2));
+      await allDataReceived.future.timeout(const Duration(seconds: 2));
       await subscription.cancel();
 
       // Verify both tables have data
@@ -199,7 +199,7 @@ void main() {
 
       CrdtSync.client(client, pair.b);
 
-      await connected.future.timeout(Duration(seconds: 2));
+      await connected.future.timeout(const Duration(seconds: 2));
 
       // Store peer ID before closing
       final peerId = serverSync.peerId;
@@ -208,7 +208,7 @@ void main() {
       // Close the connection
       await serverSync.close();
 
-      await disconnected.future.timeout(Duration(seconds: 2));
+      await disconnected.future.timeout(const Duration(seconds: 2));
     });
   });
 
@@ -242,9 +242,9 @@ void main() {
       );
 
       final serverPeerId =
-          await serverConnected.future.timeout(Duration(seconds: 2));
+          await serverConnected.future.timeout(const Duration(seconds: 2));
       final clientPeerId =
-          await clientConnected.future.timeout(Duration(seconds: 2));
+          await clientConnected.future.timeout(const Duration(seconds: 2));
 
       // Verify peer IDs are correctly exchanged
       expect(serverPeerId, equals(client.nodeId));
@@ -268,12 +268,12 @@ void main() {
 
       CrdtSync.client(client, pair.b);
 
-      await connected.future.timeout(Duration(seconds: 2));
+      await connected.future.timeout(const Duration(seconds: 2));
 
       // Simulate connection drop
       await pair.a.close();
 
-      await disconnected.future.timeout(Duration(seconds: 2));
+      await disconnected.future.timeout(const Duration(seconds: 2));
     });
   });
 }

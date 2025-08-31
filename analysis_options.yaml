@@ -1,7 +1,12 @@
-include: package:lints/recommended.yaml
+include: package:very_good_analysis/analysis_options.yaml
 
 linter:
   rules:
-    prefer_single_quotes: true
-    unawaited_futures: true
-    prefer_relative_imports: true
+    # TODO: Add API docs when the package is stable
+    public_member_api_docs: false
+    # I prefer to specify the arguments explicitly to be clear
+    avoid_redundant_argument_values: false
+    # I'm the only one working on this project, so I don't need to worry about this
+    flutter_style_todos: false
+    # I wanna define abstract classes however I want
+    one_member_abstracts: false

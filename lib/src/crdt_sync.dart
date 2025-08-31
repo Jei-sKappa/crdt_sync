@@ -1,10 +1,13 @@
+// TODO: Handle prints
+// ignore_for_file: avoid_print
+
 import 'dart:async';
+import 'dart:io' show WebSocket;
 
 import 'package:crdt/crdt.dart';
+import 'package:crdt_sync/crdt_sync.dart';
+import 'package:crdt_sync/src/sync_protocol.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'sync_protocol.dart';
-import 'sync_channel.dart';
 
 typedef ClientHandshakeDataBuilder = FutureOr<Object>? Function();
 typedef ServerHandshakeDataBuilder = FutureOr<Object>? Function(
@@ -24,30 +27,6 @@ typedef OnDisconnect = void Function(String peerId, int? code, String? reason);
 typedef OnCommunicationError = void Function(Object error, StackTrace st);
 
 class CrdtSync {
-  final bool isClient;
-  final Crdt crdt;
-
-  final ClientHandshakeDataBuilder? clientHandshakeDataBuilder;
-  final ServerHandshakeDataBuilder? serverHandshakeDataBuilder;
-  final ChangesetBuilder changesetBuilder;
-  final RecordValidator? validateRecord;
-  final ChangesetMapper? mapIncomingChangeset;
-  final OnConnect? onConnect;
-  final OnDisconnect? onDisconnect;
-  final OnChangeset? onChangesetReceived;
-  final OnChangeset? onChangesetSent;
-  final OnCommunicationError? onCommunicationError;
-  final bool verbose;
-
-  late final SyncProtocol _syncProtocol;
-  String? _peerId;
-  // Per-connection watermark for outgoing deltas.
-  // Always uses local node id semantics (as ensured by handshake parsing).
-  late Hlc _lastSentModified;
-
-  /// Represents the nodeId from the remote peer connected to this socket.
-  String? get peerId => _peerId;
-
   /// Starts synchronization over a generic [SyncChannel] on the client side.
   ///
   /// Use [handshakeDataBuilder] to send connection metadata on the first frame.
@@ -178,11 +157,11 @@ class CrdtSync {
   /// This is a convenience wrapper around [CrdtSync.server] that automatically
   /// wraps the WebSocket in a [WebSocketSyncChannel].
   ///
-  /// It's recommended that the supplied [socket] has a ping interval set to
+  /// It's recommended that the supplied [webSocket] has a ping interval set to
   /// avoid stale connections. This can be done in the parent framework, e.g.
-  /// by setting [pingInterval] in shelf_web_socket's [webSocketHandler].
+  /// by setting `pingInterval` in shelf_web_socket's `webSocketHandler`.
   ///
-  /// Also provided are [listen] and [upgrade] as helper functions to accept new
+  /// Also provided are `listen` and `upgrade` as helper functions to accept new
   /// connections, and upgrade existing ones, respectively.
   ///
   /// See [CrdtSync.server] for a description of the remaining parameters.
@@ -219,9 +198,6 @@ class CrdtSync {
     this.crdt,
     SyncChannel channel, {
     required this.isClient,
-    this.clientHandshakeDataBuilder,
-    this.serverHandshakeDataBuilder,
-    ChangesetBuilder? changesetBuilder,
     required this.validateRecord,
     required this.mapIncomingChangeset,
     required this.onConnect,
@@ -230,14 +206,43 @@ class CrdtSync {
     required this.onChangesetReceived,
     required this.onChangesetSent,
     required this.verbose,
+    this.clientHandshakeDataBuilder,
+    this.serverHandshakeDataBuilder,
+    ChangesetBuilder? changesetBuilder,
   })  : changesetBuilder = changesetBuilder ?? crdt.getChangeset,
-        assert((isClient && serverHandshakeDataBuilder == null) ||
-            (!isClient && clientHandshakeDataBuilder == null)) {
+        assert(
+            (isClient && serverHandshakeDataBuilder == null) ||
+                (!isClient && clientHandshakeDataBuilder == null),
+            'Only one of clientHandshakeDataBuilder and '
+            'serverHandshakeDataBuilder can be provided') {
     _handle(channel);
   }
 
+  final bool isClient;
+  final Crdt crdt;
+  final ClientHandshakeDataBuilder? clientHandshakeDataBuilder;
+  final ServerHandshakeDataBuilder? serverHandshakeDataBuilder;
+  final ChangesetBuilder changesetBuilder;
+  final RecordValidator? validateRecord;
+  final ChangesetMapper? mapIncomingChangeset;
+  final OnConnect? onConnect;
+  final OnDisconnect? onDisconnect;
+  final OnChangeset? onChangesetReceived;
+  final OnChangeset? onChangesetSent;
+  final OnCommunicationError? onCommunicationError;
+  final bool verbose;
+
+  late final SyncProtocol _syncProtocol;
+  String? _peerId;
+  // Per-connection watermark for outgoing deltas.
+  // Always uses local node id semantics (as ensured by handshake parsing).
+  late Hlc _lastSentModified;
+
+  /// Represents the nodeId from the remote peer connected to this socket.
+  String? get peerId => _peerId;
+
   Future<void> _handle(SyncChannel channel) async {
-    StreamSubscription? localSubscription;
+    StreamSubscription<CrdtChangeset>? localSubscription;
 
     _syncProtocol = SyncProtocol(
       channel,
@@ -279,7 +284,7 @@ class CrdtSync {
         modifiedAfter: handshake.lastModified,
       );
       _sendChangeset(changeset);
-    } catch (e, st) {
+    } on Object catch (e, st) {
       onCommunicationError?.call(e, st);
       await localSubscription?.cancel();
       await _syncProtocol.close();
@@ -303,7 +308,7 @@ class CrdtSync {
         await crdt.getLastModified(exceptNodeId: crdt.nodeId),
         await clientHandshakeDataBuilder?.call(),
       );
-      return await _syncProtocol.receiveHandshake();
+      return _syncProtocol.receiveHandshake();
     } else {
       // A good client always introduces itself first
       final handshake = await _syncProtocol.receiveHandshake();
@@ -331,17 +336,19 @@ class CrdtSync {
   }
 
   Future<void> _mergeChangeset(CrdtChangeset changeset) async {
+    var maybeUpdatedChangeset = changeset;
+
     // Filter out records which fail validation
     if (validateRecord != null) {
       final validatedChangeset = <String, CrdtTableChangeset>{};
-      for (final entry in changeset.entries) {
+      for (final entry in maybeUpdatedChangeset.entries) {
         final table = entry.key;
         final validatedRecords = <CrdtRecord>[];
         for (final record in entry.value) {
           try {
             final isValid = await validateRecord!(table, record);
             if (isValid) validatedRecords.add(record);
-          } catch (e, st) {
+          } on Object catch (e, st) {
             _logException(e, st);
             // Skip records that cause validator exceptions
           }
@@ -350,19 +357,19 @@ class CrdtSync {
           validatedChangeset[table] = validatedRecords;
         }
       }
-      changeset = validatedChangeset;
+      maybeUpdatedChangeset = validatedChangeset;
     }
 
     // Allow implementation to intercept and modify records
     if (mapIncomingChangeset != null) {
       final mappedChangeset = <String, CrdtTableChangeset>{};
-      for (final entry in changeset.entries) {
+      for (final entry in maybeUpdatedChangeset.entries) {
         final table = entry.key;
         final mappedRecords = <CrdtRecord>[];
         for (final record in entry.value) {
           try {
             mappedRecords.add(mapIncomingChangeset!(table, record));
-          } catch (e, st) {
+          } on Object catch (e, st) {
             _logException(e, st);
             // Skip records that cause mapper exceptions
           }
@@ -371,15 +378,15 @@ class CrdtSync {
           mappedChangeset[table] = mappedRecords;
         }
       }
-      changeset = mappedChangeset;
+      maybeUpdatedChangeset = mappedChangeset;
     }
 
     // Notify and merge
-    onChangesetReceived?.call(
-        _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
+    onChangesetReceived?.call(_peerId!,
+        maybeUpdatedChangeset.map((key, value) => MapEntry(key, value.length)));
     try {
-      await crdt.merge(changeset);
-    } catch (e, st) {
+      await crdt.merge(maybeUpdatedChangeset);
+    } on Object catch (e, st) {
       _logException(e, st);
     }
   }

@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'package:test/test.dart';
-import 'package:web_socket_channel/io.dart';
+import 'dart:io';
 
 import 'package:crdt_sync/crdt_sync.dart';
-
-import 'dart:io';
+import 'package:test/test.dart';
+import 'package:web_socket_channel/io.dart';
 
 void main() {
   group('DuplexStreamChannel', () {
@@ -62,7 +61,7 @@ void main() {
       await channel.ready;
 
       final received = Completer<String>();
-      channel.stream.listen((event) => received.complete(event));
+      channel.stream.listen(received.complete);
       channel.sink.add('ping');
       expect(await received.future, 'ping');
       // Not all runtimes surface close code/reason reliably; ensure close completes

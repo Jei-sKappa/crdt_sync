@@ -92,8 +92,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     'Join and start organizing',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color:
-                          theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                      color: theme.textTheme.bodyMedium?.color
+                          ?.withValues(alpha: 0.7),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -131,8 +131,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             if (text.isEmpty) return 'Please enter your email';
                             final emailRegex =
                                 RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-                            if (!emailRegex.hasMatch(text))
+                            if (!emailRegex.hasMatch(text)) {
                               return 'Enter a valid email';
+                            }
                             return null;
                           },
                         ),
@@ -149,8 +150,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           validator: (value) {
                             final text = value ?? '';
                             if (text.isEmpty) return 'Please enter a password';
-                            if (text.length < 6)
+                            if (text.length < 6) {
                               return 'Password must be at least 6 characters';
+                            }
                             return null;
                           },
                         ),
@@ -167,10 +169,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           onFieldSubmitted: (_) => _submit(),
                           validator: (value) {
                             final text = value ?? '';
-                            if (text.isEmpty)
+                            if (text.isEmpty) {
                               return 'Please confirm your password';
-                            if (text != _passwordController.text)
+                            }
+                            if (text != _passwordController.text) {
                               return 'Passwords do not match';
+                            }
                             return null;
                           },
                         ),

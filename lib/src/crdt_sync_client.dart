@@ -1,11 +1,13 @@
+// TODO: Handle prints
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:math';
 
 import 'package:crdt/crdt.dart';
+import 'package:crdt_sync/src/crdt_sync.dart';
+import 'package:crdt_sync/src/sync_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'crdt_sync.dart';
-import 'sync_channel.dart';
 
 const _defaultMinDelay = 2; // In seconds. Minimum is 2 because 1² = 1.
 const _defaultMaxDelay = 10;
@@ -15,37 +17,6 @@ enum ConnectionState { disconnected, connecting, connected }
 typedef ChannelFactory = Future<SyncChannel> Function();
 
 class CrdtSyncClient {
-  final Crdt crdt;
-  final ChannelFactory channelFactory;
-  final ClientHandshakeDataBuilder? handshakeDataBuilder;
-  final ChangesetBuilder? changesetBuilder;
-  final RecordValidator? validateRecord;
-  final ChangesetMapper? mapIncomingChangeset;
-  final void Function()? onConnecting;
-  final OnConnect? onConnect;
-  final OnDisconnect? onDisconnect;
-  final OnCommunicationError? onCommunicationError;
-  final OnChangeset? onChangesetReceived;
-  final OnChangeset? onChangesetSent;
-  final bool verbose;
-  final int minReconnectDelay;
-  final int maxReconnectDelay;
-
-  CrdtSync? _crdtSync;
-
-  var _onlineMode = false;
-  var _state = ConnectionState.disconnected;
-  final _stateController = StreamController<ConnectionState>.broadcast();
-
-  late int _reconnectDelay; // in seconds
-  Timer? _reconnectTimer;
-
-  /// Get the current connection state.
-  ConnectionState get state => _state;
-
-  /// Stream connection state changes.
-  Stream<ConnectionState> get watchState => _stateController.stream;
-
   /// A client that automatically manages the connection state of an
   /// underlying [CrdtSync].
   ///
@@ -54,8 +25,9 @@ class CrdtSyncClient {
   /// The [channelFactory] is called each time a connection attempt is made.
   /// It should create and return a new [SyncChannel] instance.
   ///
-  /// [minReconnectDelay] and [maxReconnectDelay] control the exponential backoff
-  /// reconnection strategy (in seconds). Defaults to 2 and 10 seconds respectively.
+  /// [minReconnectDelay] and [maxReconnectDelay] control the exponential
+  /// backoff reconnection strategy (in seconds). Defaults to 2 and 10 seconds
+  /// respectively.
   ///
   /// See [CrdtSync.client] for a description of the remaining parameters.
   CrdtSyncClient(
@@ -97,7 +69,8 @@ class CrdtSyncClient {
     int minReconnectDelay = _defaultMinDelay,
     int maxReconnectDelay = _defaultMaxDelay,
   }) {
-    assert({'ws', 'wss'}.contains(uri.scheme));
+    assert({'ws', 'wss'}.contains(uri.scheme),
+        'Invalid URI scheme: ${uri.scheme}');
     return CrdtSyncClient(
       crdt,
       () async {
@@ -121,10 +94,41 @@ class CrdtSyncClient {
     );
   }
 
+  final Crdt crdt;
+  final ChannelFactory channelFactory;
+  final ClientHandshakeDataBuilder? handshakeDataBuilder;
+  final ChangesetBuilder? changesetBuilder;
+  final RecordValidator? validateRecord;
+  final ChangesetMapper? mapIncomingChangeset;
+  final void Function()? onConnecting;
+  final OnConnect? onConnect;
+  final OnDisconnect? onDisconnect;
+  final OnCommunicationError? onCommunicationError;
+  final OnChangeset? onChangesetReceived;
+  final OnChangeset? onChangesetSent;
+  final bool verbose;
+  final int minReconnectDelay;
+  final int maxReconnectDelay;
+
+  CrdtSync? _crdtSync;
+
+  var _onlineMode = false;
+  ConnectionState _state = ConnectionState.disconnected;
+  final _stateController = StreamController<ConnectionState>.broadcast();
+
+  late int _reconnectDelay; // in seconds
+  Timer? _reconnectTimer;
+
+  /// Get the current connection state.
+  ConnectionState get state => _state;
+
+  /// Stream connection state changes.
+  Stream<ConnectionState> get watchState => _stateController.stream;
+
   /// Start trying to connect using the provided [channelFactory].
   /// The client will continuously try to connect using exponential backoff
   /// until it succeeds.
-  void connect() async {
+  Future<void> connect() async {
     if (_state != ConnectionState.disconnected) return;
     _onlineMode = true;
     _reconnectTimer?.cancel();
@@ -162,7 +166,7 @@ class CrdtSyncClient {
         },
         verbose: verbose,
       );
-    } catch (e) {
+    } on Object catch (e) {
       _log('$e');
       _setState(ConnectionState.disconnected);
       _maybeReconnect();
@@ -182,8 +186,7 @@ class CrdtSyncClient {
 
   void _maybeReconnect() {
     if (_onlineMode) {
-      _reconnectTimer =
-          Timer(Duration(seconds: _reconnectDelay), () => connect());
+      _reconnectTimer = Timer(Duration(seconds: _reconnectDelay), connect);
       _log('Reconnecting in ${_reconnectDelay}s…');
       _reconnectDelay = min(_reconnectDelay * 2, maxReconnectDelay);
     }

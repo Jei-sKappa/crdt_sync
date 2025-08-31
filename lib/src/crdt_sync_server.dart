@@ -1,10 +1,12 @@
+// TODO: Handle prints
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:io';
 
 import 'package:crdt/crdt.dart';
+import 'package:crdt_sync/src/crdt_sync.dart';
 import 'package:web_socket_channel/io.dart';
-
-import 'crdt_sync.dart';
 
 const _defaultPingInterval = Duration(seconds: 20);
 
@@ -17,11 +19,12 @@ typedef ServerOnConnect = void Function(CrdtSync crdtSync, Object? customData);
 /// server to identify and release stale connections. This is highly
 /// recommended since stale connections keep database subscriptions which
 /// cause queries to be run on every change.
-/// Defaults to 20 seconds, set to [null] to disable.
+/// Defaults to 20 seconds, set to `null` to disable.
 ///
-/// Use [onConnection] to monitor incoming HTTP connections.
+/// Use [onConnecting] to monitor incoming HTTP connections.
 ///
-/// [onUpgradeError] can be used to monitor connection->websocket upgrade errors.
+/// [onUpgradeError] can be used to monitor connection->websocket upgrade
+/// errors.
 ///
 /// See [CrdtSync.server] for a description of the remaining parameters.
 Future<void> listen(
@@ -43,7 +46,7 @@ Future<void> listen(
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
   if (verbose) print('Listening on localhost:${server.port}');
 
-  await for (HttpRequest request in server) {
+  await for (final HttpRequest request in server) {
     onConnecting?.call(request);
     try {
       await upgrade(
@@ -60,7 +63,7 @@ Future<void> listen(
         onChangesetSent: onChangesetSent,
         verbose: verbose,
       );
-    } catch (e) {
+    } on Object catch (e) {
       if (verbose) print(e);
       onUpgradeError?.call(e, request);
     }

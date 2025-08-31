@@ -30,7 +30,7 @@ class WebSocketSyncChannel implements SyncChannel {
   final WebSocketChannel _socket;
 
   late final StreamSink<String> _stringSink =
-      _StringStreamSinkProxy(_socket.sink);
+      _WebSocketSinkStreamSinkStringAdapter(_socket.sink);
 
   @override
   Stream<String> get stream => _socket.stream.cast<String>();
@@ -87,10 +87,10 @@ class DuplexStreamChannel implements SyncChannel {
   }
 }
 
-class _StringStreamSinkProxy implements StreamSink<String> {
-  _StringStreamSinkProxy(this._inner);
+class _WebSocketSinkStreamSinkStringAdapter implements StreamSink<String> {
+  _WebSocketSinkStreamSinkStringAdapter(this._inner);
 
-  final StreamSink _inner;
+  final WebSocketSink _inner;
 
   @override
   void add(String data) => _inner.add(data);
@@ -100,11 +100,11 @@ class _StringStreamSinkProxy implements StreamSink<String> {
       _inner.addError(error, stackTrace);
 
   @override
-  Future addStream(Stream<String> stream) => _inner.addStream(stream);
+  Future<void> addStream(Stream<String> stream) => _inner.addStream(stream);
 
   @override
-  Future close() => _inner.close();
+  Future<void> close() => _inner.close();
 
   @override
-  Future get done => _inner.done;
+  Future<void> get done => _inner.done;
 }

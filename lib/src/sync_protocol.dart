@@ -1,9 +1,12 @@
+// TODO: Handle prints
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:crdt/crdt.dart';
 
-import 'sync_channel.dart';
+import 'package:crdt_sync/src/sync_channel.dart';
 
 typedef Handshake = ({
   String nodeId,
@@ -12,15 +15,6 @@ typedef Handshake = ({
 });
 
 class SyncProtocol {
-  final SyncChannel channel;
-  final void Function(int? code, String? reason) onDisconnect;
-  final void Function(CrdtChangeset changeset) onChangeset;
-  final bool verbose;
-
-  late final StreamSubscription _subscription;
-
-  final _handshakeCompleter = Completer<Handshake>();
-
   /// Begin managing the channel:
   /// 1. Perform handshake.
   /// 2. Monitor for incoming changesets.
@@ -36,7 +30,7 @@ class SyncProtocol {
     _subscription = channel.stream.listen(
       (raw) async {
         try {
-          final message = jsonDecode(raw);
+          final message = jsonDecode(raw) as Map<String, dynamic>;
           _log('⬇️ $message');
           if (!_handshakeCompleter.isCompleted) {
             // The first message is a handshake
@@ -52,14 +46,14 @@ class SyncProtocol {
             final changeset = parseCrdtChangeset(message);
             onChangeset(changeset);
           }
-        } catch (e, _) {
+        } on Object catch (e) {
           _log('$e');
           // Close gracefully on malformed messages
           await close(4000, '$e');
         }
       },
       cancelOnError: true,
-      onError: (e) {
+      onError: (Object e) {
         if (!_handshakeCompleter.isCompleted) {
           _handshakeCompleter.completeError(e);
         }
@@ -77,12 +71,21 @@ class SyncProtocol {
     );
   }
 
+  final SyncChannel channel;
+  final void Function(int? code, String? reason) onDisconnect;
+  final void Function(CrdtChangeset changeset) onChangeset;
+  final bool verbose;
+
+  late final StreamSubscription<String> _subscription;
+
+  final _handshakeCompleter = Completer<Handshake>();
+
   void _send(Map<String, Object?> data) {
     if (data.isEmpty) return;
     _log('⬆️ $data');
     try {
       channel.sink.add(jsonEncode(data));
-    } catch (e, st) {
+    } on Object catch (e, st) {
       _log('$e\n$st');
       close(4000, '$e');
     }
