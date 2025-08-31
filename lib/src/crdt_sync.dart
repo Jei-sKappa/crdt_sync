@@ -253,7 +253,7 @@ class CrdtSync {
     try {
       final handshake = await _performHandshake();
       _peerId = handshake.nodeId;
-      
+
       // Initialize per-connection watermark from the peer handshake.
       _lastSentModified = handshake.lastModified;
 
@@ -324,7 +324,7 @@ class CrdtSync {
         _peerId!, changeset.map((key, value) => MapEntry(key, value.length)));
 
     // Update per-connection watermark to the max 'modified' we just sent.
-    final maxSent = _maxModifiedInChangeset(changeset);
+    final maxSent = _maxHlcInChangeset(changeset);
     if (maxSent != null && maxSent.compareTo(_lastSentModified) > 0) {
       _lastSentModified = maxSent;
     }
@@ -384,11 +384,11 @@ class CrdtSync {
     }
   }
 
-  Hlc? _maxModifiedInChangeset(CrdtChangeset changeset) {
+  Hlc? _maxHlcInChangeset(CrdtChangeset changeset) {
     Hlc? max;
     for (final table in changeset.values) {
       for (final record in table) {
-        final raw = record['modified'];
+        final raw = record['hlc'];
         if (raw == null) continue;
         final hlc = raw is Hlc ? raw : Hlc.parse(raw as String);
         if (max == null || hlc.compareTo(max) > 0) {

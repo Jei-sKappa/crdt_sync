@@ -81,6 +81,9 @@ void main() {
     // Wait for validation to complete
     await validationComplete.future.timeout(Duration(seconds: 2));
 
+    // Wait a bit more for processing to complete
+    await Future.delayed(Duration(milliseconds: 200));
+
     // Verify validation results
     expect(validationResults['ok'], true);
     expect(validationResults['bad'], false);
@@ -262,14 +265,15 @@ void main() {
     await client.put('t', 'error', {'data': 'should fail'});
     await client.put('t', 'ok', {'data': 'should pass'});
 
+    // Wait for validation to complete
     await validationComplete.future.timeout(Duration(seconds: 2));
+
+    // Wait a bit more for processing to complete
+    await Future.delayed(Duration(milliseconds: 200));
 
     // Verify validation results
     expect(validationResults['error'], false);
     expect(validationResults['ok'], true);
-
-    // Wait a bit more for processing to complete
-    await Future.delayed(Duration(milliseconds: 200));
 
     // Verify that only the valid record made it through
     final serverRecords = server.getChangeset()['t'] ?? [];
